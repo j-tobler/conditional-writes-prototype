@@ -28,3 +28,10 @@ alpha       ::== [A-Za-z]
 num         ::== [0-9]
 ws          ::== ' ' | NEWLINE
 """
+
+class Parser:
+    def __init__(self):
+        self.s = ''
+        self.idx = 0
+        self.err = ''
+    
