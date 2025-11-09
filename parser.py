@@ -1,37 +1,36 @@
-"""
-=== Grammar ====================================================================
+from lark import Lark
 
-How to read this grammar:
-- Single quotes ('') represent literals.
-- A sequence (A B) is shorthand for (A ws* B).
-- The modifier (+) means "one or more in a sequence".
-- The modifier (*) means "zero or more in a sequence".
-- The notation <A B> represents a sequence of A separated by B.
-- We use [] to denote regex character classes.
-- The non-terminal NEWLINE represents a standard newline character.
+parser = Lark(
+    r"""
+    start:          procedure+
+    procedure:      "proc" _SEP CNAME "{" _statement* "}"
+    _statement:     assignment | conditional | loop | assume
+    assignment:     CNAME ":=" expr ";"
+    conditional:    "if" _SEP expr "{" _statement* "}"
+    loop:           "while" _SEP expr "{" _statement* "}"
+    assume:         "assume" _SEP expr ";"
+    ?expr:          implication | expr "<==>" implication
+    ?implication:   disjunction | disjunction "==>" implication
+    ?disjunction:   conjunction | disjunction "||" conjunction
+    ?conjunction:   negation | conjunction "&&" negation
+    ?negation:      atom | "!" negation
+    ?atom:          sum | "(" expr ")"
+    ?sum:           term | sum sum_op term
+    ?term:          signed_val | term term_op signed_val
+    ?signed_val:    val | sum_op signed_val
+    val:            CNAME | INT | "(" sum ")"
+    id:             CNAME
+    num:            INT
+    !sum_op:        "+" | "-"
+    !term_op:       "*" | "/" | "%"
+    _SEP:           WS+
 
-start       ::== procedure+
-procedure   ::== 'proc' ws+ id '(' <id ','> ')' '{' statement* '}'
-statement   ::== assignment | conditional | loop | call | assume
-assignment  ::== id ':=' expr ';'
-conditional ::== 'if' '(' expr ')' '{' statement* '}'
-loop        ::== 'while' '(' expr ')' '{' statement* '}'
-call        ::== id '(' <id ','> ')' ';'
-assume      ::== 'assume' '(' ';'
-expr        ::== value | uop value | value binop value
-value       ::== id | num
-uop         ::== '!' | '-'
-binop       ::== '+' | '-' | '*' | '/' | '%' | '&&' | '||' | '==>' | '<===>'
-id          ::== alpha alphanum*
-alphanum    ::== alpha | num
-alpha       ::== [A-Za-z]
-num         ::== [0-9]
-ws          ::== ' ' | NEWLINE
-"""
+    %import common (WS, CNAME, INT)
+    %ignore WS
+    """
+)
 
-class Parser:
-    def __init__(self):
-        self.s = ''
-        self.idx = 0
-        self.err = ''
-    
+if __name__ == '__main__':
+    text = "proc main { james := 5 + 6 + 7; if cond {} james := 6 + 7; }"
+    tree = parser.parse(text)
+    print(tree.pretty())
