@@ -71,7 +71,35 @@ class ConstantLattice(Lattice):
     def __eq__(self, other):
         return self.env == other.env and self.is_bot == other.is_bot
 
+r"""
+start:          procedure+
+procedure:      "proc" _SEP CNAME "{" _statement* "}"
+_statement:     assignment | conditional | loop | assume
+assignment:     CNAME ":=" expr ";"
+conditional:    "if" _SEP expr "{" _statement* "}"
+loop:           "while" _SEP expr "{" _statement* "}"
+assume:         "assume" _SEP expr ";"
+?expr:          implication | expr "<==>" implication
+?implication:   disjunction | disjunction "==>" implication
+?disjunction:   conjunction | disjunction "||" conjunction
+?conjunction:   negation | conjunction "&&" negation
+?negation:      atom | "!" negation
+?atom:          inequality | "(" expr ")"
+?inequality:    sum | sum (inequality_op sum)*
+?sum:           term | sum sum_op term
+?term:          signed_val | term term_op signed_val
+?signed_val:    val | sum_op signed_val
+val:            CNAME | INT | "(" sum ")"
+id:             CNAME
+num:            INT
+!sum_op:        "+" | "-"
+!term_op:       "*" | "/" | "%"
+!inequality_op: "<" | "<=" | "==" | ">=" | ">" | "!="
+_SEP:           WS+
 
+%import common (WS, CNAME, INT)
+%ignore WS
+"""
 
 class AbstractDomain(ABC):
     @staticmethod
@@ -85,10 +113,13 @@ class AbstractDomain(ABC):
         pass
 
 
-
 class ConstantDomain(AbstractDomain):
     @staticmethod
-    @abstractmethod
+    def eval_expr(state, expr):
+        if 
+
+
+    @staticmethod
     def transfer_assign(state: ConstantLattice, assignment: lark.tree.Tree):
         lhs: str = assignment.children[0].value
         rhs = assignment.children[1]
@@ -100,6 +131,5 @@ class ConstantDomain(AbstractDomain):
 
         
     @staticmethod
-    @abstractmethod
     def transfer_filter(state: ConstantLattice, inst):
         pass
