@@ -26,7 +26,7 @@ parser = Lark(
     id:             CNAME
     num:            INT
     !_sum_op:        "+" | "-"
-    !_term_op:       "*" | "/" | "%"
+    !_term_op:       "*"
     !_inequality_op: "<" | "<=" | "==" | ">=" | ">" | "!="
     _SEP:           WS+
 
@@ -49,10 +49,8 @@ class BinOp(Enum):
     PLUS = 10
     MINUS = 11
     TIMES = 12
-    DIV = 13
-    MOD = 14
 
-bool_op_str = ["<==>", "==>", "||", "&&", "<", "<=", "==", ">=", ">", "!=", "+", "-", "*", "/", "%"]
+bool_op_str = ["<==>", "==>", "||", "&&", "<", "<=", "==", ">=", ">", "!=", "+", "-", "*"]
 
 class UnOp(Enum):
     NOT = 0
@@ -264,10 +262,6 @@ def parse_expr(tree):
         op = None
         if tree.children[1].value == '*':
             op = BinOp.TIMES
-        elif tree.children[1].value == '/':
-            op = BinOp.DIV
-        elif tree.children[1].value == '%':
-            op = BinOp.MOD
         else:
             throw_parser_error()
         return BinExpr(parse_expr(tree.children[0]), parse_expr(tree.children[2]), op)
