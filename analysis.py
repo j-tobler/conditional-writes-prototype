@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from parser import *
 
 
 class Lattice(ABC):
@@ -61,7 +62,7 @@ class ConstantLattice(Lattice):
         return ConstantLattice({k: v for k, v in self.env.items() if k in other.env and other.env[k] == v}, False)
 
     def __and__(self, other):
-        if self.is_bot || other.is_bot:
+        if self.is_bot or other.is_bot:
             return bot()
         for k in set(self.env.keys()) & set(other.env.keys()):
             if self.env[k] != other.env[k]:
@@ -97,16 +98,34 @@ class ConstantDomain(AbstractDomain):
         if isinstance(expr, BinExpr):
             lhs = ConstantDomain.eval_expr(state, expr.lhs)
             rhs = ConstantDomain.eval_expr(state, expr.rhs)
+            if expr.op == BinOp.IMPL:
+                if lhs == 0 or rhs != 0 and rhs != None:
+                    return 1
+                elif lhs != 0 and lhs != None and rhs == 0:
+                    return 0
+                return None
+            if expr.op == BinOp.DISJ:
+                if lhs != 0 and lhs != None or rhs != 0 and rhs != None:
+                    return 1
+                elif lhs == 0 and rhs == 0:
+                    return 0
+                return None
+            if expr.op == BinOp.CONJ:
+                if lhs != 0 and lhs != None and rhs != 0 and rhs != None:
+                    return 1
+                elif lhs == 0 or rhs == 0:
+                    return 0
+                return None
+            if expr.op == BinOp.TIMES:
+                if lhs == 0 or rhs == 0:
+                    return 0
+                if lhs == None or rhs == None:
+                    return None
+                return lhs * rhs
             if lhs == None or rhs == None:
                 return None
             if expr.op == BinOp.BICOND:
-                return 1 if (lhs != 0) == (rhs != 0) else 0
-            if expr.op == BinOp.IMPL:
-                return 1 if (lhs == 0) or (rhs != 0) else 0
-            if expr.op == BinOp.DISJ:
-                return 1 if (lhs != 0) or (rhs != 0) else 0
-            if expr.op == BinOp.CONJ:
-                return 1 if (lhs != 0) and (rhs != 0) else 0
+                return 1 if (lhs == 0) == (rhs == 0) else 0
             if expr.op == BinOp.LT:
                 return 1 if lhs < rhs else 0
             if expr.op == BinOp.LE:
@@ -123,8 +142,6 @@ class ConstantDomain(AbstractDomain):
                 return lhs + rhs
             if expr.op == BinOp.MINUS:
                 return lhs - rhs
-            if expr.op == BinOp.TIMES:
-                return lhs * rhs
             raise RuntimeError('Unexpected binary operator: ' + str(expr.op))
         if isinstance(expr, UnExpr):
             rhs = ConstantDomain.eval_expr(state, expr.rhs)
@@ -132,18 +149,18 @@ class ConstantDomain(AbstractDomain):
                 return None
             if expr.op == NOT:
                 return 1 if rhs == 0 else 0
-            if expr.op == POS
+            if expr.op == POS:
                 return rhs
-            if expr.op == NEG
+            if expr.op == NEG:
                 return -rhs
             raise RuntimeError('Unexpected unary operator: ' + str(expr.op))
         raise RuntimeError('Unexpected expression type: ' + str(expr))
 
     @staticmethod
-    def transfer_assign(state: ConstantLattice, assign: Assignment):
+    def transfer_assign(state: ConstantLattice, assign: Assignment) -> ConstantLattice:
         if state.is_bot:
             return ConstantLattice.bot()
-        env = [k, v for k, v in state.env]
+        env = state.env.copy()
         lhs = assign.lhs
         rhs = ConstantDomain.eval_expr(state, assign.rhs)
         if rhs == None:
@@ -154,60 +171,39 @@ class ConstantDomain(AbstractDomain):
         return ConstantLattice(env, False)
         
     @staticmethod
-    def transfer_filter(state: ConstantLattice, expr):
+    def transfer_filter(state: ConstantLattice, expr) -> ConstantLattice:
+        """
+        We only handle logical sentences over inequalities e1 <*> e2, where e1 or e2 is a variable and the other operand
+        is an expression that evaluates to a constant in the current state.
+        """
         if state.is_bot:
             return ConstantLattice.bot()
-        env = [k, v for k, v in state.env]
-        if isinstance(expr, int):
-            return ConstantLattice.bot() if expr == 0 else ConstantLattice(env, False)
-        if isinstance(expr, str):
-            if expr in env and env[expr] == 0:
-                return ConstantLattice.bot()
-            return ConstantLattice(env, False)
+        val = ConstantDomain.eval_expr(state, expr)
+        if val == 0:
+            return ConstantLattice.bot() # condition is false
+        elif val != None:
+            return state # condition is true in all states
         if isinstance(expr, BinExpr):
-            pass # todo
-        #     lhs = ConstantDomain.eval_expr(state, expr.lhs)
-        #     rhs = ConstantDomain.eval_expr(state, expr.rhs)
-        #     if lhs == None or rhs == None:
-        #         return None
-        #     if expr.op == BinOp.BICOND:
-        #         return 1 if (lhs != 0) == (rhs != 0) else 0
-        #     if expr.op == BinOp.IMPL:
-        #         return 1 if (lhs == 0) or (rhs != 0) else 0
-        #     if expr.op == BinOp.DISJ:
-        #         return 1 if (lhs != 0) or (rhs != 0) else 0
-        #     if expr.op == BinOp.CONJ:
-        #         return 1 if (lhs != 0) and (rhs != 0) else 0
-        #     if expr.op == BinOp.LT:
-        #         return 1 if lhs < rhs else 0
-        #     if expr.op == BinOp.LE:
-        #         return 1 if lhs <= rhs else 0
-        #     if expr.op == BinOp.EQ:
-        #         return 1 if lhs == rhs else 0
-        #     if expr.op == BinOp.GE:
-        #         return 1 if lhs >= rhs else 0
-        #     if expr.op == BinOp.GT:
-        #         return 1 if lhs > rhs else 0
-        #     if expr.op == BinOp.NE:
-        #         return 1 if lhs != rhs else 0
-        #     if expr.op == BinOp.PLUS:
-        #         return lhs + rhs
-        #     if expr.op == BinOp.MINUS:
-        #         return lhs - rhs
-        #     if expr.op == BinOp.TIMES:
-        #         return lhs * rhs
-        #     raise RuntimeError('Unexpected binary operator: ' + str(expr.op))
-        # if isinstance(expr, UnExpr):
-        #     rhs = ConstantDomain.eval_expr(state, expr.rhs)
-        #     if rhs == None:
-        #         return None
-        #     if expr.op == NOT:
-        #         return 1 if rhs == 0 else 0
-        #     if expr.op == POS
-        #         return rhs
-        #     if expr.op == NEG
-        #         return -rhs
-        #     raise RuntimeError('Unexpected unary operator: ' + str(expr.op))
-        # raise RuntimeError('Unexpected expression type: ' + str(expr))
-
-
+            if expr.op == BinOp.DISJ:
+                lhs_filter = ConstantDomain.transfer_filter(state, expr.lhs)
+                rhs_filter = ConstantDomain.transfer_filter(state, expr.rhs)
+                return lhs_filter | rhs_filter
+            if expr.op == BinOp.CONJ:
+                lhs_filter = ConstantDomain.transfer_filter(state, expr.lhs)
+                rhs_filter = ConstantDomain.transfer_filter(state, expr.rhs)
+                return lhs_filter & rhs_filter
+            if expr.op == BinOp.EQ:
+                lhs_eval = ConstantDomain.eval_expr(state, expr.lhs)
+                rhs_eval = ConstantDomain.eval_expr(state, expr.rhs)
+                if rhs_eval != None and isinstance(expr.lhs, str):
+                    # ConstantDomain.eval(state, expr) == None we have lhs_eval == None and thus expr.lhs not in state
+                    # map expr.lhs to expr.rhs
+                    env = state.env.copy()
+                    env[expr.lhs] = rhs_eval
+                    return ConstantLattice(env, False)
+                if lhs_eval != None and isinstance(expr.rhs, str):
+                    env = state.env.copy()
+                    env[expr.rhs] = lhs_eval
+                    return ConstantLattice(env, False)
+        # default: apply no filtering
+        return state
