@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from parser import *
+from itertools import combinations
 
 
 class Lattice(ABC):
@@ -47,8 +48,8 @@ class Lattice(ABC):
 
 class ConstantLattice(Lattice):
     def __init__(self, env, is_bot):
-        self.env = env
-        self.is_bot = is_bot
+        self.env = env # read-only!
+        self.is_bot = is_bot # read-only!
 
     @staticmethod
     def top():
@@ -83,12 +84,22 @@ class ConstantLattice(Lattice):
 class AbstractDomain(ABC):
     @staticmethod
     @abstractmethod
-    def transfer_assign(state, inst):
+    def transfer_assign(state: Lattice, inst: Lang) -> Lattice:
         pass
         
     @staticmethod
     @abstractmethod
-    def transfer_filter(state, inst):
+    def transfer_filter(state: Lattice, inst: Lang) -> Lattice:
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def havoc(state: Lattice, vars_to_remove) -> Lattice:
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def constrained_vars(state: Lattice) -> set:
         pass
 
 
@@ -215,8 +226,22 @@ class ConstantDomain(AbstractDomain):
         # default: apply no filtering
         return state
 
+    @staticmethod
+    def havoc(state: ConstantLattice, vars_to_remove) -> ConstantLattice:
+        if state.is_bot:
+            return state
+        env = {k: v for k, v in state.env.items() if k not in vars_to_remove}
+        return ConstantLattice(env, False)
+
+    @staticmethod
+    def constrained_vars(state: Lattice) -> set:
+        return state.env.keys()
+        
 
 class InterferenceDomain(ABC):
+    def __init__(self, D):
+        self.D = D
+
     @staticmethod
     @abstractmethod
     def stabilise(state, interference):
@@ -239,7 +264,7 @@ class ConditionalWritesLattice(Lattice):
     Variables not in the map are implied to be mapped to bot.
     """
     def __init__(self, env):
-        self.env = env
+        self.env = env # read-only!
 
     @staticmethod
     def top():
@@ -272,14 +297,80 @@ class ConditionalWritesLattice(Lattice):
 
 class ConditionalWritesDomain(InterferenceDomain):
     @staticmethod
-    def stabilise(state, interference: ConditionalWritesLattice, N=-1):
+    def stabilise(d: Lattice, i: ConditionalWritesLattice, N=-1) -> Lattice:
         # N == -1 specifies maximum precision.
-        pass
-        
-    @staticmethod
-    def transitions(state, inst) -> ConditionalWritesLattice:
-        pass
+        N = len(i.keys()) if N == -1 or N > len(i.keys()) else N
+        X = stabilise_helper(set(), i, d, N, set())
+        if N == len(i.keys()):
+            return d | X
+        VN = {frozenset(combo) for combo in combinations(i.keys(), N + 1)}
+        Y = D.bot()
+        for V in VN:
+            meet = d
+            for v in V:
+                meet &= i.env(v)
+            Y |= meet
+        flattened = {v for subset in VN for v in subset}
+        Y = D.havoc(Y, flattened)
+        return d | X | Y
+
+    def stabilise_helper(V, i, d, N, done) -> Lattice:
+        if len(V) > N or V in done:
+            return D.bot()
+        ret = d
+        for v in V:
+            ret = ret & i.env[v]
+        if ret.is_bot():
+            done.add(V)
+            return ret
+        ret = D.havoc(ret, V)
+        for v in set(i.keys()) - V:
+            ret |= stabilise_helper(V + {v}, i, d, N, done)
+        done.add(V)
+        return ret
 
     @staticmethod
-    def close(interference: ConditionalWritesLattice):
-        pass
+    def transitions(d: Lattice, assign: Assignment) -> ConditionalWritesLattice:
+        return ConditionalWritesLattice({assign.lhs: d})
+
+    @staticmethod
+    def close(i: ConditionalWritesLattice):
+        # if i.env[v] is bot, then close(i).env[v] will also be bot, so we don't need to consider unmapped vars
+        while True:
+            old_i = i.copy() # since lattices are read-only, this is safe
+            # update i
+            # only update mappings for variables not mapped to bot
+            for v in i.keys():
+                # update mapping for v
+                # iterate through variables constrained in i.env[v]
+                constrained = D.constrained_vars(i.env[v])
+                i[v] = close_helper(set(), i, constrained, v, set())
+            i |= old_i
+            # check if reached fixpoint
+            if i == old_i:
+                return i
+
+    def close_helper(V, i, powset_domain, v, done):
+        if V in done:
+            return D.bot()
+        havoced = D.havoc(i.env[v], V)
+        meet = D.top()
+        for other_v in V:
+            meet &= i.env[other_v]
+        if meet <= havoced:
+            done.add(V)
+            return meet
+        ret = meet & havoced
+        for other_v in powset_domain - V:
+            ret |= close_helper(V + {other_v}, i, powset_domain, v, done)
+        done.add(V)
+        return ret
+
+
+
+
+
+
+
+
+        
