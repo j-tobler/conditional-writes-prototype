@@ -14,6 +14,10 @@ class Lattice(ABC):
         pass
 
     @abstractmethod
+    def is_bot(self):
+        pass
+
+    @abstractmethod
     def __or__(self, other):
         pass
 
@@ -53,6 +57,9 @@ class ConstantLattice(Lattice):
     @staticmethod
     def bot():
         return ConstantLattice({}, True)
+
+    def is_bot(self):
+        return self.is_bot
 
     def __or__(self, other):
         if self.is_bot:
@@ -207,3 +214,72 @@ class ConstantDomain(AbstractDomain):
                     return ConstantLattice(env, False)
         # default: apply no filtering
         return state
+
+
+class InterferenceDomain(ABC):
+    @staticmethod
+    @abstractmethod
+    def stabilise(state, interference):
+        pass
+        
+    @staticmethod
+    @abstractmethod
+    def transitions(state, inst):
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def close(interference):
+        pass
+
+
+class ConditionalWritesLattice(Lattice):
+    """
+    Maps each variable to the set of states under which it may be written to.
+    Variables not in the map are implied to be mapped to bot.
+    """
+    def __init__(self, env):
+        self.env = env
+
+    @staticmethod
+    def top():
+        # we never actually use this
+        raise NotImplementedError('Method top is not implemented for the ConditionalWritesLattice.')
+
+    @staticmethod
+    def bot():
+        return ConditionalWritesLattice({})
+
+    def __or__(self, other):
+        env = self.env.copy()
+        for k in other.env.keys:
+            env[k] = env[k] | other.env[k] if k in env else other.env[k]
+        return ConditionalWritesLattice(env)
+
+    def __and__(self, other):
+        env = self.env.copy()
+        for k in other.env.keys:
+            env[k] = env[k] & other.env[k] if k in env else other.env[k]
+        return ConditionalWritesLattice(env).filter_out_bot()
+
+    def filter_out_bot(self):
+        self.env = {k: v for k, v in self.env if not v.is_bot()}
+        return self
+
+    def __eq__(self, other):
+        return self.env == other.env
+
+
+class ConditionalWritesDomain(InterferenceDomain):
+    @staticmethod
+    def stabilise(state, interference: ConditionalWritesLattice, N=-1):
+        # N == -1 specifies maximum precision.
+        pass
+        
+    @staticmethod
+    def transitions(state, inst) -> ConditionalWritesLattice:
+        pass
+
+    @staticmethod
+    def close(interference: ConditionalWritesLattice):
+        pass
