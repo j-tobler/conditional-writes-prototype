@@ -1,14 +1,17 @@
-from parser import parser, parse_program
+from analysis import *
 
 def main():
     file = open('parser_test.txt', 'r')
     text = file.read()
     file.close()
 
-    lark_tree = parser.parse(text)
-    syntax_tree = parse_program(lark_tree)
+    lark_tree = program_parser.parse(text)
+    program = parse_program(lark_tree)
 
-    print(str(syntax_tree))
+    for proc in program.procedures:
+        proc.analyse(ConstantDomain, ConditionalWritesDomain, ConstantDomain.top(), ConditionalWritesDomain.bot(), ConditionalWritesDomain.bot())
+
+    print(str(program))
 
 if __name__ == '__main__':
     main()

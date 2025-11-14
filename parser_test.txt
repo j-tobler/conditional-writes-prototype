@@ -1,35 +1,14 @@
-proc simple {
-	x := y;
+proc T1 {
+    r := 0;
+    if z == 0 {
+        x := 0;
+        r := x;
+    }
+    assume 1;
 }
 
-proc multi_statement {
-    x := y;
-    y := z;
-    abc := 123;
-}
-
-proc conditionals {
-    x := y;
-    if x == y {
-        x := 5;
-    } else {
-        x := 6;
-    }
-    if x == y {
-        x := 7;
-    }
-    if 1 {} else {
-        x := 5;
-    }
-}
-
-proc complicated_expression {
-    x := 5 <==> 3 <==> x ==> 5 + 3 * 3 % 3 || y && (z ==> 2 < 3 < 4);
-}
-
-proc loops {
-    while 1 < x <= 5 {
-        assume x < y;
-        y := z - -(-x - -z);
-    }
+proc T2 {
+    assume z == 1;
+    x := 1;
+    assume 1;
 }
