@@ -8,8 +8,20 @@ class AnalysisMode(Enum):
     TRANSITIVE = 1
     NON_TRANSITIVE = 2
 
-ANALYSIS_MODE = AnalysisMode.TRANSITIVE
+ANALYSIS_MODE = AnalysisMode.NON_TRANSITIVE
 PRECISION = -1
+
+class GlobalCounter:
+    def __init__(self):
+        self.count = 0
+
+    def inc(self):
+        self.count += 1
+
+    def __str__(self):
+        return str(self.count)
+
+CONSTANT_LATTICE_CALLS = GlobalCounter()
 
 program_parser = Lark(
     r"""
@@ -462,6 +474,8 @@ class ConstantLattice(Lattice):
         return self.is_bot
 
     def __or__(self, other):
+        global CONSTANT_LATTICE_CALLS
+        CONSTANT_LATTICE_CALLS.inc()
         if self.is_bot:
             return other
         if other.is_bot:
@@ -469,6 +483,8 @@ class ConstantLattice(Lattice):
         return ConstantLattice({k: v for k, v in self.env.items() if k in other.env and other.env[k] == v}, False)
 
     def __and__(self, other):
+        global CONSTANT_LATTICE_CALLS
+        CONSTANT_LATTICE_CALLS.inc()
         if self.is_bot or other.is_bot:
             return ConstantLattice.bot()
         for k in set(self.env.keys()) & set(other.env.keys()):

@@ -1,6 +1,10 @@
 from analysis import *
 
 def main():
+    global ANALYSIS_MODE
+    global PRECISION
+    global CONSTANT_LATTICE_CALLS
+
     file = open('basic_example.txt', 'r')
     text = file.read()
     file.close()
@@ -49,6 +53,7 @@ def main():
         print(proc.name + ': ' + str(post))
     print()
     print('Program Postcondition: ' + str(final_post))
+    print('Number of state-lattice join and meet operations: ' + str(CONSTANT_LATTICE_CALLS))
 
 
 if __name__ == '__main__':
