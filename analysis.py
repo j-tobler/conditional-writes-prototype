@@ -8,7 +8,7 @@ class AnalysisMode(Enum):
     TRANSITIVE = 1
     NON_TRANSITIVE = 2
 
-ANALYSIS_MODE = AnalysisMode.NON_TRANSITIVE
+ANALYSIS_MODE = AnalysisMode.TRANSITIVE
 PRECISION = -1
 
 class GlobalCounter:
@@ -741,6 +741,9 @@ class ConditionalWritesLattice(Lattice):
 
     def copy(self):
         return ConditionalWritesLattice
+
+    def __str__(self):
+        return '\n'.join(v + ' -> [' + str(d) + ']' for v, d in self.env.items())
 
 
 class ConditionalWritesDomain(InterferenceDomain):

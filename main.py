@@ -1,11 +1,12 @@
 from analysis import *
+import sys
 
 def main():
     global ANALYSIS_MODE
     global PRECISION
     global CONSTANT_LATTICE_CALLS
 
-    file = open('basic_example.txt', 'r')
+    file = open(sys.argv[1], 'r')
     text = file.read()
     file.close()
 
@@ -18,8 +19,10 @@ def main():
     pre = D.top() # todo: parameterise
     guars = {proc: I.bot() for proc in program.procedures}
     posts = {proc: D.top() for proc in program.procedures}
+    iterations = 0
     while True:
-        old_guars = guars
+        iterations += 1
+        old_guars = guars.copy()
         for proc in program.procedures:
             rely = I.bot()
             for other_proc in guars:
@@ -52,8 +55,13 @@ def main():
     for proc, post in posts.items():
         print(proc.name + ': ' + str(post))
     print()
+    print('Guarantee Conditions:')
+    for proc, guar in guars.items():
+        print(proc.name + ':\n' + str(guar))
+        print()
     print('Program Postcondition: ' + str(final_post))
     print('Number of state-lattice join and meet operations: ' + str(CONSTANT_LATTICE_CALLS))
+    print(f'Iterations: {iterations}')
 
 
 if __name__ == '__main__':
