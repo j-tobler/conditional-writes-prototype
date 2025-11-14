@@ -4,11 +4,10 @@ proc T1 {
         x := 0;
         r := x;
     }
-    assume 1;
 }
 
 proc T2 {
-    assume z == 1;
-    x := 1;
-    assume 1;
+    if z == 1 {
+        x := 1;
+    }
 }

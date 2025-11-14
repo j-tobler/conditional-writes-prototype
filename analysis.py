@@ -447,8 +447,8 @@ class Lattice(ABC):
 
 class ConstantLattice(Lattice):
     def __init__(self, env, is_bot):
-        self.env = env # read-only!
-        self.is_bot = is_bot # read-only!
+        self.env = env
+        self.is_bot = is_bot
 
     @staticmethod
     def top():
@@ -470,10 +470,10 @@ class ConstantLattice(Lattice):
 
     def __and__(self, other):
         if self.is_bot or other.is_bot:
-            return bot()
+            return ConstantLattice.bot()
         for k in set(self.env.keys()) & set(other.env.keys()):
             if self.env[k] != other.env[k]:
-                return bot()
+                return ConstantLattice.bot()
         return ConstantLattice(self.env | other.env, False)
 
     def __eq__(self, other):
@@ -511,6 +511,11 @@ class AbstractDomain(ABC):
     @staticmethod
     @abstractmethod
     def top() -> Lattice:
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def bot() -> Lattice:
         pass
 
 
@@ -651,6 +656,10 @@ class ConstantDomain(AbstractDomain):
     @staticmethod
     def top() -> ConstantLattice:
         return ConstantLattice.top()
+
+    @staticmethod
+    def bot() -> ConstantLattice:
+        return ConstantLattice.bot()
         
 
 class InterferenceDomain(ABC):
@@ -681,7 +690,7 @@ class ConditionalWritesLattice(Lattice):
     Variables not in the map are implied to be mapped to bot.
     """
     def __init__(self, env):
-        self.env = env # read-only!
+        self.env = env
 
     @staticmethod
     def top():
@@ -713,6 +722,9 @@ class ConditionalWritesLattice(Lattice):
 
     def __eq__(self, other):
         return self.env == other.env
+
+    def copy(self):
+        return ConditionalWritesLattice
 
 
 class ConditionalWritesDomain(InterferenceDomain):
@@ -746,7 +758,7 @@ class ConditionalWritesDomain(InterferenceDomain):
             return ret
         ret = D.havoc(ret, V)
         for v in set(i.env.keys()) - V:
-            ret |= ConditionalWritesDomain.stabilise_helper(D, V + {v}, i, d, N, done)
+            ret |= ConditionalWritesDomain.stabilise_helper(D, V | {v}, i, d, N, done)
         done.add(frozenset(V))
         return ret
 
@@ -758,14 +770,15 @@ class ConditionalWritesDomain(InterferenceDomain):
     def close(D, i: ConditionalWritesLattice):
         # if i.env[v] is bot, then close(i).env[v] will also be bot, so we don't need to consider unmapped vars
         while True:
-            old_i = i.copy() # since lattices are read-only, this is safe
+            old_i = i
+            i = ConditionalWritesLattice(i.env.copy())
             # update i
             # only update mappings for variables not mapped to bot
             for v in i.env.keys():
                 # update mapping for v
                 # iterate through variables constrained in i.env[v] (we skip optimisation 2 for now)
                 constrained = D.constrained_vars(i.env[v])
-                i[v] = ConditionalWritesDomain.close_helper(D, set(), i, constrained, v, set())
+                i.env[v] = ConditionalWritesDomain.close_helper(D, set(), i, constrained, v, set())
             i |= old_i
             # check if reached fixpoint
             if i == old_i:
@@ -778,13 +791,17 @@ class ConditionalWritesDomain(InterferenceDomain):
         havoced = D.havoc(i.env[v], V)
         meet = D.top()
         for other_v in V:
-            meet &= i.env[other_v]
+            if other_v in i.env:
+                meet &= i.env[other_v]
+            else:
+                meet = D.bot()
+                break
         if meet <= havoced:
             done.add(frozenset(V))
             return meet
         ret = meet & havoced
         for other_v in powset_domain - V:
-            ret |= ConditionalWritesDomain.close_helper(D, V + {other_v}, i, powset_domain, v, done)
+            ret |= ConditionalWritesDomain.close_helper(D, V | {other_v}, i, powset_domain, v, done)
         done.add(frozenset(V))
         return ret
 
