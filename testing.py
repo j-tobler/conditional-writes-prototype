@@ -1,12 +1,8 @@
 def main():
-    d = [1]
-    foo(d)
-    print(d)
-
-def foo(d):
-    f = [100]
-    d[0] = f
-    del f
+    f = {'a', 'b', 'c', 'd', 'e', 'f', 'g'}
+    g = {'b', 'c', 'a', 'd', 'e', 'f', 'g'}
+    print(f is g)
+    print(f == g)
 
 if __name__ == '__main__':
     main()

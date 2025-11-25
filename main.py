@@ -1,5 +1,6 @@
 from analysis import *
 import sys
+import time
 
 def main():
     global ANALYSIS_MODE
@@ -13,14 +14,25 @@ def main():
     lark_tree = program_parser.parse(text)
     program = parse_program(lark_tree)
 
+    start_time = time.perf_counter()
+
     I = ConditionalWritesDomain
-    D = ConstantDomain
+    # D = ConstantDomain
+    D = DisjunctiveConstantsDomain
 
     pre = D.top() # todo: parameterise
+    print('pre: ' + str(len(pre._env)))
+    e = next(iter(pre._env))
+    print('pre: ' + str(e))
+    print('pre: ' + str(type(e)))
+    print(pre.is_bot())
+    print(pre)
+
     guars = {proc: I.bot() for proc in program.procedures}
     posts = {proc: D.top() for proc in program.procedures}
     iterations = 0
     while True:
+        print(str(program))
         iterations += 1
         old_guars = guars.copy()
         for proc in program.procedures:
@@ -49,6 +61,8 @@ def main():
     for post in posts.values():
         final_post &= post
 
+    end_time = time.perf_counter()
+
     print(str(program))
     print()
     print('Local Postconditions:')
@@ -60,8 +74,10 @@ def main():
         print(proc.name + ':\n' + str(guar))
         print()
     print('Program Postcondition: ' + str(final_post))
-    print('Number of state-lattice join and meet operations: ' + str(CONSTANT_LATTICE_CALLS))
+    print('Number of state-lattice join and meet operations (constant lattice): ' + str(CONSTANT_LATTICE_CALLS))
+    print('Number of state-lattice join and meet operations (disj constant lattice): ' + str(CONSTANT_LATTICE_CALLS))
     print(f'Iterations: {iterations}')
+    print(f'Time: {end_time - start_time}')
 
 
 if __name__ == '__main__':

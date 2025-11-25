@@ -8,7 +8,7 @@ class AnalysisMode(Enum):
     TRANSITIVE = 1
     NON_TRANSITIVE = 2
 
-ANALYSIS_MODE = AnalysisMode.TRANSITIVE
+ANALYSIS_MODE = AnalysisMode.NON_TRANSITIVE
 PRECISION = -1
 
 class GlobalCounter:
@@ -22,6 +22,7 @@ class GlobalCounter:
         return str(self.count)
 
 CONSTANT_LATTICE_CALLS = GlobalCounter()
+DISJ_CONSTANT_LATTICE_CALLS = GlobalCounter()
 
 program_parser = Lark(
     r"""
@@ -430,6 +431,10 @@ class Lattice(ABC):
         pass
 
     @abstractmethod
+    def constrained_vars(self):
+        pass
+
+    @abstractmethod
     def __or__(self, other):
         pass
 
@@ -439,6 +444,10 @@ class Lattice(ABC):
 
     @abstractmethod
     def __eq__(self, other):
+        pass
+
+    @abstractmethod
+    def __hash__(self):
         pass
 
     def __ne__(self, other):
@@ -458,9 +467,10 @@ class Lattice(ABC):
 
 
 class ConstantLattice(Lattice):
-    def __init__(self, env, is_bot):
-        self.env = env
-        self.is_bot = is_bot
+    def __init__(self, env: dict, is_bot: bool):
+        self._env = env
+        self._is_bot = is_bot
+        self._hash_cache = None
 
     @staticmethod
     def top():
@@ -471,36 +481,104 @@ class ConstantLattice(Lattice):
         return ConstantLattice({}, True)
 
     def is_bot(self):
-        return self.is_bot
+        return self._is_bot
+
+    def constrained_vars(self):
+        return self._env.keys()
 
     def __or__(self, other):
         global CONSTANT_LATTICE_CALLS
         CONSTANT_LATTICE_CALLS.inc()
-        if self.is_bot:
+        
+        if self.is_bot():
             return other
-        if other.is_bot:
+        if other.is_bot():
             return self
-        return ConstantLattice({k: v for k, v in self.env.items() if k in other.env and other.env[k] == v}, False)
+        return ConstantLattice({k: v for k, v in self._env.items() if k in other._env and other._env[k] == v}, False)
 
     def __and__(self, other):
         global CONSTANT_LATTICE_CALLS
         CONSTANT_LATTICE_CALLS.inc()
-        if self.is_bot or other.is_bot:
+        
+        if self.is_bot() or other.is_bot():
             return ConstantLattice.bot()
-        for k in set(self.env.keys()) & set(other.env.keys()):
-            if self.env[k] != other.env[k]:
+        for k in self._env.keys() & other._env.keys():
+            if self._env[k] != other._env[k]:
                 return ConstantLattice.bot()
-        return ConstantLattice(self.env | other.env, False)
+        return ConstantLattice(self._env | other._env, False)
 
     def __eq__(self, other):
-        return self.env == other.env and self.is_bot == other.is_bot
+        return self._env == other._env and self.is_bot() == other.is_bot()
+
+    def __hash__(self):
+        if self._hash_cache != None:
+            return self._hash_cache
+        self._hash_cache = hash(frozenset(self._env.items())) + hash(self._is_bot)
+        return self._hash_cache
 
     def __str__(self):
-        if self.is_bot:
+        if self.is_bot():
             return 'bot'
-        if not self.env:
+        if not self._env:
             return 'top'
-        return ', '.join(v + ' -> ' + str(self.env[v]) for v in self.env)
+        return ', '.join(v + ' -> ' + str(self._env[v]) for v in self._env)
+
+
+class ConstantDisjunctionLattice(Lattice):
+    def __init__(self, env: set):
+        self._env = env
+        self._hash_cache = None
+
+    @staticmethod
+    def top():
+        return ConstantDisjunctionLattice({ConstantLattice.top()})
+
+    @staticmethod
+    def bot():
+        return ConstantDisjunctionLattice(set())
+
+    def is_bot(self):
+        return not self._env
+
+    def constrained_vars(self):
+        ret = set()
+        for x in self._env:
+            ret |= x.constrained_vars()
+        return ret
+
+    def well_formed(self):
+        maximal_env = {x for x in self._env if not any(x < y for y in self._env)}
+        if maximal_env == {ConstantLattice.bot()}:
+            # if maximal_env contains bot then maximal_env == {bot} since it's a maximal set
+            return ConstantDisjunctionLattice.bot()
+        return ConstantDisjunctionLattice(maximal_env)
+
+    def apply_to_each_disjunct(self, func):
+        return ConstantDisjunctionLattice({func(x) for x in self._env}).well_formed()
+
+    def __or__(self, other):
+        global DISJ_CONSTANT_LATTICE_CALLS
+        DISJ_CONSTANT_LATTICE_CALLS.inc()
+        return ConstantDisjunctionLattice(self._env | other._env).well_formed()
+
+    def __and__(self, other):
+        global DISJ_CONSTANT_LATTICE_CALLS
+        DISJ_CONSTANT_LATTICE_CALLS.inc()
+        return ConstantDisjunctionLattice({x & y for x in self._env for y in other._env}).well_formed()
+
+    def __eq__(self, other):
+        return self._env == other._env
+
+    def __hash__(self):
+        if self._hash_cache != None:
+            return self._hash_cache
+        self._hash_cache = hash(frozenset(self._env))
+        return self._hash_cache
+
+    def __str__(self):
+        if not self._env:
+            return 'bot'
+        return ' \\/ '.join(str(x) for x in self._env)
 
 
 class AbstractDomain(ABC):
@@ -538,7 +616,7 @@ class AbstractDomain(ABC):
 class ConstantDomain(AbstractDomain):
     @staticmethod
     def eval_expr(state: ConstantLattice, expr) -> int | None:
-        env = state.env
+        env = state._env
         if isinstance(expr, int):
             return expr
         if isinstance(expr, str):
@@ -608,9 +686,9 @@ class ConstantDomain(AbstractDomain):
 
     @staticmethod
     def transfer_assign(state: ConstantLattice, assign: Assignment) -> ConstantLattice:
-        if state.is_bot:
+        if state.is_bot():
             return ConstantLattice.bot()
-        env = state.env.copy()
+        env = state._env.copy()
         lhs = assign.lhs
         rhs = ConstantDomain.eval_expr(state, assign.rhs)
         if rhs == None:
@@ -626,7 +704,7 @@ class ConstantDomain(AbstractDomain):
         We only handle logical sentences over inequalities e1 <*> e2, where e1 or e2 is a variable and the other operand
         is an expression that evaluates to a constant in the current state.
         """
-        if state.is_bot:
+        if state.is_bot():
             return ConstantLattice.bot()
         val = ConstantDomain.eval_expr(state, expr)
         if val == 0:
@@ -648,11 +726,11 @@ class ConstantDomain(AbstractDomain):
                 if rhs_eval != None and isinstance(expr.lhs, str):
                     # ConstantDomain.eval(state, expr) == None we have lhs_eval == None and thus expr.lhs not in state
                     # map expr.lhs to expr.rhs
-                    env = state.env.copy()
+                    env = state._env.copy()
                     env[expr.lhs] = rhs_eval
                     return ConstantLattice(env, False)
                 if lhs_eval != None and isinstance(expr.rhs, str):
-                    env = state.env.copy()
+                    env = state._env.copy()
                     env[expr.rhs] = lhs_eval
                     return ConstantLattice(env, False)
         # default: apply no filtering
@@ -660,14 +738,14 @@ class ConstantDomain(AbstractDomain):
 
     @staticmethod
     def havoc(state: ConstantLattice, vars_to_remove) -> ConstantLattice:
-        if state.is_bot:
+        if state.is_bot():
             return state
-        env = {k: v for k, v in state.env.items() if k not in vars_to_remove}
+        env = {k: v for k, v in state._env.items() if k not in vars_to_remove}
         return ConstantLattice(env, False)
 
     @staticmethod
     def constrained_vars(state: ConstantLattice) -> set:
-        return state.env.keys()
+        return state.constrained_vars()
 
     @staticmethod
     def top() -> ConstantLattice:
@@ -677,6 +755,32 @@ class ConstantDomain(AbstractDomain):
     def bot() -> ConstantLattice:
         return ConstantLattice.bot()
         
+
+class DisjunctiveConstantsDomain(AbstractDomain):
+    @staticmethod
+    def transfer_assign(state: ConstantDisjunctionLattice, assign: Assignment) -> ConstantDisjunctionLattice:
+        return state.apply_to_each_disjunct(lambda x: ConstantDomain.transfer_assign(x, assign))
+
+    @staticmethod
+    def transfer_filter(state: ConstantDisjunctionLattice, expr) -> ConstantDisjunctionLattice:
+        return state.apply_to_each_disjunct(lambda x: ConstantDomain.transfer_filter(x, expr))
+
+    @staticmethod
+    def havoc(state: ConstantDisjunctionLattice, vars_to_remove) -> ConstantDisjunctionLattice:
+        return state.apply_to_each_disjunct(lambda x: ConstantDomain.havoc(x, vars_to_remove))
+
+    @staticmethod
+    def constrained_vars(state: ConstantDisjunctionLattice) -> set:
+        return state.constrained_vars()
+
+    @staticmethod
+    def top() -> ConstantDisjunctionLattice:
+        return ConstantDisjunctionLattice.top()
+
+    @staticmethod
+    def bot() -> ConstantDisjunctionLattice:
+        return ConstantDisjunctionLattice.bot()
+
 
 class InterferenceDomain(ABC):
     @staticmethod
@@ -706,7 +810,7 @@ class ConditionalWritesLattice(Lattice):
     Variables not in the map are implied to be mapped to bot.
     """
     def __init__(self, env):
-        self.env = env
+        self._env = env
 
     @staticmethod
     def top():
@@ -718,48 +822,51 @@ class ConditionalWritesLattice(Lattice):
         return ConditionalWritesLattice({})
 
     def is_bot(self):
-        return not self.env
+        return not self._env
+
+    def constrained_vars(self):
+        raise NotImplementedError('Function constrained_vars not implemented for ConditionalWritesLattice.')
 
     def __or__(self, other):
-        env = self.env.copy()
-        for k in other.env.keys():
-            env[k] = env[k] | other.env[k] if k in env else other.env[k]
+        env = self._env.copy()
+        for k in other._env.keys():
+            env[k] = env[k] | other._env[k] if k in env else other._env[k]
         return ConditionalWritesLattice(env)
 
     def __and__(self, other):
-        env = self.env.copy()
-        for k in other.env.keys():
-            env[k] = env[k] & other.env[k] if k in env else other.env[k]
+        env = self._env.copy()
+        for k in other._env.keys():
+            env[k] = env[k] & other._env[k] if k in env else other._env[k]
         return ConditionalWritesLattice(env).filter_out_bot()
 
     def filter_out_bot(self):
-        self.env = {k: v for k, v in self.env if not v.is_bot()}
+        self._env = {k: v for k, v in self._env if not v.is_bot()()}
         return self
 
     def __eq__(self, other):
-        return self.env == other.env
+        return self._env == other._env
 
     def copy(self):
         return ConditionalWritesLattice
 
     def __str__(self):
-        return '\n'.join(v + ' -> [' + str(d) + ']' for v, d in self.env.items())
+        return '\n'.join(v + ' -> [' + str(d) + ']' for v, d in self._env.items())
 
 
 class ConditionalWritesDomain(InterferenceDomain):
     @staticmethod
     def stabilise(D, d: Lattice, i: ConditionalWritesLattice, N=-1) -> Lattice:
         # N == -1 specifies maximum precision.
-        N = len(i.env.keys()) if N == -1 or N > len(i.env.keys()) else N
+        N = len(i._env.keys()) if N == -1 or N > len(i._env.keys()) else N
         X = ConditionalWritesDomain.stabilise_helper(D, set(), i, d, N, set())
-        if N == len(i.env.keys()):
+        if N == len(i._env.keys()):
             return d | X
-        VN = {frozenset(combo) for combo in combinations(i.env.keys(), N + 1)}
+        VN = {frozenset(combo) for combo in combinations(i._env.keys(), N + 1)}
         Y = D.bot()
         for V in VN:
             meet = d
             for v in V:
-                meet &= i.env(v)
+                meet &= i._env(v)
             Y |= meet
         flattened = {v for subset in VN for v in subset}
         Y = D.havoc(Y, flattened)
@@ -771,12 +878,12 @@ class ConditionalWritesDomain(InterferenceDomain):
             return D.bot()
         ret = d
         for v in V:
-            ret = ret & i.env[v]
-        if ret.is_bot:
+            ret = ret & i._env[v]
+        if ret.is_bot():
             done.add(frozenset(V))
             return ret
         ret = D.havoc(ret, V)
-        for v in set(i.env.keys()) - V:
+        for v in set(i._env.keys()) - V:
             ret |= ConditionalWritesDomain.stabilise_helper(D, V | {v}, i, d, N, done)
         done.add(frozenset(V))
         return ret
@@ -787,18 +894,18 @@ class ConditionalWritesDomain(InterferenceDomain):
 
     @staticmethod
     def close(D, i: ConditionalWritesLattice):
-        # if i.env[v] is bot, then close(i).env[v] will also be bot, so we don't need to consider unmapped vars
+        # if i._env[v] is bot, then close(i)._env[v] will also be bot, so we don't need to consider unmapped vars
         while True:
             old_i = i
-            i = ConditionalWritesLattice(i.env.copy())
+            i = ConditionalWritesLattice(i._env.copy())
             # update i
             # only update mappings for variables not mapped to bot
-            for v in i.env.keys():
+            for v in i._env.keys():
                 # update mapping for v
-                # iterate through variables constrained in i.env[v] (we skip optimisation 2 for now)
-                constrained = D.constrained_vars(i.env[v])
-                i.env[v] = ConditionalWritesDomain.close_helper(D, set(), i, constrained, v, set())
-            i |= old_i
+                # iterate through variables constrained in i._env[v] (we skip optimisation 2 for now)
+                constrained = D.constrained_vars(i._env[v])
+                i._env[v] = ConditionalWritesDomain.close_helper(D, set(), i, constrained, v, set())
+            # i |= old_i
             # check if reached fixpoint
             if i == old_i:
                 return i
@@ -807,11 +914,11 @@ class ConditionalWritesDomain(InterferenceDomain):
     def close_helper(D, V, i, powset_domain, v, done):
         if V in done:
             return D.bot()
-        havoced = D.havoc(i.env[v], V)
+        havoced = D.havoc(i._env[v], V)
         meet = D.top()
         for other_v in V:
-            if other_v in i.env:
-                meet &= i.env[other_v]
+            if other_v in i._env:
+                meet &= i._env[other_v]
             else:
                 meet = D.bot()
                 break
