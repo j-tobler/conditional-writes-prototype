@@ -1,83 +1,81 @@
 from analysis import *
-import sys
-import time
+from parsing import program_parser, parse_program, Program
+from config import Config, StateDomains, set_config
+from stats import Stats
+
 
 def main():
-    global ANALYSIS_MODE
-    global PRECISION
-    global CONSTANT_LATTICE_CALLS
+    # parse args and initialise global configuration struct Config
+    set_config()
 
-    file = open(sys.argv[1], 'r')
+    # read file containing target program
+    file = open(Config.target_path, 'r')
     text = file.read()
     file.close()
 
+    # parse target program with lark parser
     lark_tree = program_parser.parse(text)
+    # parse lark AST into our custom AST representing a CFG
     program = parse_program(lark_tree)
 
-    start_time = time.perf_counter()
-
+    # configure interference domains and state domains
     I = ConditionalWritesDomain
-    # D = ConstantDomain
-    D = DisjunctiveConstantsDomain
+    if Config.state_domain == StateDomains.CONSTANTS:
+        D = ConstantDomain
+    elif Config.state_domain == StateDomains.DISJUNCTIVE_CONSTANTS:
+        D = DisjunctiveConstantsDomain
+    else:
+        raise RuntimeError('Could not find the abstract domain: ' + str(Config.state_domain))
 
-    pre = D.top() # todo: parameterise
-    print('pre: ' + str(len(pre._env)))
-    e = next(iter(pre._env))
-    print('pre: ' + str(e))
-    print('pre: ' + str(type(e)))
-    print(pre.is_bot())
-    print(pre)
+    # begin analysis
+    Stats.start_timer()
+    G, R = run_analysis(I, D, program)
+    Stats.end_timer()
 
+    # display resulting RG conditions and performance stats
+    # note that 'program' maintains its own proof outline during the analysis
+    print_results(G, R, program)
+
+
+def print_results(guars: dict, relys: dict, program: Program):
+    print('Stable Instruction Preconditions:')
+    print(str(program))
+    print()
+    print('Guarantee Conditions:')
+    print('\n'.join([f'{proc.name}:\n{guar}' for proc, guar in guars.items()]))
+    print()
+    print('Rely Conditions:')
+    print('\n'.join([f'{proc.name}:\n{rely}' for proc, rely in relys.items()]))
+    print()
+    print(f'State lattice join and meet operations count: {Stats.state_lattice_joins + Stats.state_lattice_meets}')
+    print(f'Analysis time: {Stats.performance_time}')
+
+
+def run_analysis(I: InterferenceDomain, D: AbstractDomain, prog: Program):
+    def generate_rely(proc, guars):
+        rely = I.bot()
+        for other_proc in guars:
+            if proc == other_proc:
+                continue
+            rely |= guars[other_proc]
+        if Config.transitive_mode:
+            rely = I.close(D, rely)
+    
+    # initialise RG conditions
     guars = {proc: I.bot() for proc in program.procedures}
-    posts = {proc: D.top() for proc in program.procedures}
+    relys = {}
+    # derive the program precondition once, to be used repeatedly in later iterations
+    pre = D.transfer_filter(D.top(), program.precondition)
     iterations = 0
     while True:
-        print(str(program))
         iterations += 1
         old_guars = guars.copy()
         for proc in program.procedures:
-            rely = I.bot()
-            for other_proc in guars:
-                if proc == other_proc:
-                    continue
-                rely |= guars[other_proc]
-            if ANALYSIS_MODE == AnalysisMode.TRANSITIVE:
-                rely = I.close(D, rely)
-            d, r, g = proc.analyse(D, I, pre, rely, guars[proc])
-            guars[proc] = g
-            # stabilise d
-            if ANALYSIS_MODE == AnalysisMode.TRANSITIVE:
-                d = I.stabilise(D, d, r, PRECISION)
-            else:
-                while True:
-                    old_d = d
-                    d = I.stabilise(D, d, r, PRECISION)
-                    if d == old_d:
-                        break
-            posts[proc] = d
+            relys[proc] = generate_rely(proc, guars)
+            guars[proc] = proc.analyse(D, I, pre, relys[proc], I.bot())[2]
         if guars == old_guars:
             break
-    final_post = D.top();
-    for post in posts.values():
-        final_post &= post
-
-    end_time = time.perf_counter()
-
-    print(str(program))
-    print()
-    print('Local Postconditions:')
-    for proc, post in posts.items():
-        print(proc.name + ': ' + str(post))
-    print()
-    print('Guarantee Conditions:')
-    for proc, guar in guars.items():
-        print(proc.name + ':\n' + str(guar))
-        print()
-    print('Program Postcondition: ' + str(final_post))
-    print('Number of state-lattice join and meet operations (constant lattice): ' + str(CONSTANT_LATTICE_CALLS))
-    print('Number of state-lattice join and meet operations (disj constant lattice): ' + str(CONSTANT_LATTICE_CALLS))
-    print(f'Iterations: {iterations}')
-    print(f'Time: {end_time - start_time}')
+    return guars, relys
 
 
 if __name__ == '__main__':
