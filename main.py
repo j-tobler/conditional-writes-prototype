@@ -1,5 +1,6 @@
 from analysis import *
-from parsing import program_parser, parse_program, Program
+from parsing import program_parser, parse_program
+from cfg import Program
 from config import Config, StateDomains, set_config
 from stats import Stats
 
@@ -38,7 +39,8 @@ def main():
 
 
 def print_results(guars: dict, relys: dict, program: Program):
-    print('Stable Instruction Preconditions:')
+    print('Stable Proof Outlines:')
+    print()
     print(str(program))
     print()
     print('Guarantee Conditions:')
@@ -51,18 +53,19 @@ def print_results(guars: dict, relys: dict, program: Program):
     print(f'Analysis time: {Stats.performance_time}')
 
 
-def run_analysis(I: InterferenceDomain, D: AbstractDomain, prog: Program):
+def run_analysis(I: InterferenceDomain, D: AbstractDomain, program: Program):
     def generate_rely(proc, guars):
-        rely = I.bot()
+        rely = I.bot(D)
         for other_proc in guars:
             if proc == other_proc:
                 continue
             rely |= guars[other_proc]
         if Config.transitive_mode:
             rely = I.close(D, rely)
+        return rely
     
     # initialise RG conditions
-    guars = {proc: I.bot() for proc in program.procedures}
+    guars = {proc: I.bot(D) for proc in program.procedures}
     relys = {}
     # derive the program precondition once, to be used repeatedly in later iterations
     pre = D.transfer_filter(D.top(), program.precondition)
@@ -72,7 +75,7 @@ def run_analysis(I: InterferenceDomain, D: AbstractDomain, prog: Program):
         old_guars = guars.copy()
         for proc in program.procedures:
             relys[proc] = generate_rely(proc, guars)
-            guars[proc] = proc.analyse(D, I, pre, relys[proc], I.bot())[2]
+            guars[proc] = proc.analyse(D, I, pre, relys[proc], I.bot(D))[2]
         if guars == old_guars:
             break
     return guars, relys

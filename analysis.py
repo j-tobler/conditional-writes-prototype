@@ -1,20 +1,8 @@
 from abc import ABC, abstractmethod
 from itertools import combinations
-from enum import Enum
-from parsing import Assignment, Lang
-
-class GlobalCounter:
-    def __init__(self):
-        self.count = 0
-
-    def inc(self):
-        self.count += 1
-
-    def __str__(self):
-        return str(self.count)
-
-CONSTANT_LATTICE_CALLS = GlobalCounter()
-DISJ_CONSTANT_LATTICE_CALLS = GlobalCounter()
+from cfg import *
+from stats import Stats
+from config import Config
 
 
 class Lattice(ABC):
@@ -89,9 +77,7 @@ class ConstantLattice(Lattice):
         return self._env.keys()
 
     def __or__(self, other):
-        global CONSTANT_LATTICE_CALLS
-        CONSTANT_LATTICE_CALLS.inc()
-        
+        Stats.state_lattice_joins += 1
         if self.is_bot():
             return other
         if other.is_bot():
@@ -99,9 +85,7 @@ class ConstantLattice(Lattice):
         return ConstantLattice({k: v for k, v in self._env.items() if k in other._env and other._env[k] == v}, False)
 
     def __and__(self, other):
-        global CONSTANT_LATTICE_CALLS
-        CONSTANT_LATTICE_CALLS.inc()
-        
+        Stats.state_lattice_meets += 1
         if self.is_bot() or other.is_bot():
             return ConstantLattice.bot()
         for k in self._env.keys() & other._env.keys():
@@ -159,13 +143,11 @@ class ConstantDisjunctionLattice(Lattice):
         return ConstantDisjunctionLattice({func(x) for x in self._env}).well_formed()
 
     def __or__(self, other):
-        global DISJ_CONSTANT_LATTICE_CALLS
-        DISJ_CONSTANT_LATTICE_CALLS.inc()
+        Stats.state_lattice_joins += 1
         return ConstantDisjunctionLattice(self._env | other._env).well_formed()
 
     def __and__(self, other):
-        global DISJ_CONSTANT_LATTICE_CALLS
-        DISJ_CONSTANT_LATTICE_CALLS.inc()
+        Stats.state_lattice_meets += 1
         return ConstantDisjunctionLattice({x & y for x in self._env for y in other._env}).well_formed()
 
     def __eq__(self, other):
@@ -387,22 +369,31 @@ class DisjunctiveConstantsDomain(AbstractDomain):
 class InterferenceDomain(ABC):
     @staticmethod
     @abstractmethod
-    def stabilise(state, interference):
+    def stabilise(D, state, interference):
         pass
+
+    @staticmethod
+    def capture_interference(I, D, state, interference):
+        new_state = I.stabilise(D, state, interference)
+        if not Config.transitive_mode:
+            while new_state != state:
+                state = new_state
+                new_state = I.stabilise(D, state, interference)
+        return new_state
         
     @staticmethod
     @abstractmethod
-    def transitions(state, inst):
+    def transitions(D, state, inst):
         pass
 
     @staticmethod
     @abstractmethod
-    def close(interference):
+    def close(D, interference):
         pass
 
     @staticmethod
     @abstractmethod
-    def bot() -> Lattice:
+    def bot(D) -> Lattice:
         pass
 
 
@@ -452,12 +443,15 @@ class ConditionalWritesLattice(Lattice):
         return ConditionalWritesLattice
 
     def __str__(self):
+        if not self._env:
+            return 'bot'
         return '\n'.join(v + ' -> [' + str(d) + ']' for v, d in self._env.items())
 
 
 class ConditionalWritesDomain(InterferenceDomain):
     @staticmethod
-    def stabilise(D, d: Lattice, i: ConditionalWritesLattice, N=-1) -> Lattice:
+    def stabilise(D, d: Lattice, i: ConditionalWritesLattice) -> Lattice:
+        N = Config.precision
         # N == -1 specifies maximum precision.
         N = len(i._env.keys()) if N == -1 or N > len(i._env.keys()) else N
         X = ConditionalWritesDomain.stabilise_helper(D, set(), i, d, N, set())
@@ -534,5 +528,5 @@ class ConditionalWritesDomain(InterferenceDomain):
         return ret
 
     @staticmethod
-    def bot() -> Lattice:
+    def bot(D) -> Lattice:
         return ConditionalWritesLattice.bot()

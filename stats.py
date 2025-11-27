@@ -1,5 +1,6 @@
 import time
 
+
 class Stats:
     _timer = None
     performance_time = None

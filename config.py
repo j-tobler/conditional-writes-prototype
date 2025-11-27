@@ -1,5 +1,6 @@
 import argparse
-import enum
+from enum import Enum
+
 
 class StateDomains(Enum):
     CONSTANTS = 0
