@@ -8,7 +8,8 @@ program_parser = Lark(
     _precondition:   "{" biconditional "}"
     procedure:       "proc" _SEP CNAME "{" block "}"
     block:           _statement*
-    _statement:      assignment | conditional | loop | assume
+    _statement:      assignment | conditional | loop | assume | atomic
+    atomic:          "atomic" "{" block "}"
     assignment:      id_list ":=" expr_list ";"
     id_list:         CNAME ("," CNAME)*
     expr_list:       biconditional ("," biconditional)*
@@ -53,7 +54,7 @@ def parse_procedure(tree):
 def parse_block(tree):
     return [parse_statement(stmt) for stmt in tree.children]
 
-# _statement: assignment | conditional | loop | assume
+# _statement: assignment | conditional | loop | assume | atomic
 def parse_statement(tree):
     if tree.data.value == 'assignment':
         return parse_assignment(tree)
@@ -63,9 +64,11 @@ def parse_statement(tree):
         return parse_loop(tree)
     elif tree.data.value == 'assume':
         return parse_assume(tree)
+    elif tree.data.value == 'atomic':
+        return parse_atomic(tree)
     raise throw_parser_error()
 
-# assignment: CNAME ":=" biconditional ";"
+# assignment: id_list ":=" expr_list ";"
 def parse_assignment(tree):
     assignees = tree.children[0].children
     expressions = tree.children[1].children
@@ -91,6 +94,10 @@ def parse_loop(tree):
 # assume: "assume" _SEP biconditional ";"
 def parse_assume(tree):
     return Assume(parse_expr(tree.children[0]))
+
+# "atomic" "{" block "}"
+def parse_atomic(tree):
+    return Atomic(parse_block(tree.children[0]))
 
 """
 ?biconditional: implication | biconditional "<==>" implication

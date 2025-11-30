@@ -50,7 +50,7 @@ class Procedure(Lang):
 
     def analyse(self, D, I, d, r, g):
         for stmt in self.statements:
-            d, r, g = stmt.analyse(D, I, d, r, g)
+            d, r, g = stmt.analyse(D, I, d, r, g, False)
         return d, r, g
 
 class Assignment(Lang):
@@ -65,9 +65,10 @@ class Assignment(Lang):
         rhs = ', '.join([str(expr) for expr in self.rhs])
         return pre + '\n' + '\t' * indent + lhs + ' := ' + rhs + ';'
 
-    def analyse(self, D, I, d, r, g):
-        # stabilise d
-        d = I.capture_interference(I, D, d, r)
+    def analyse(self, D, I, d, r, g, is_atomic):
+        if not is_atomic:
+            # stabilise d
+            d = I.capture_interference(I, D, d, r)
         self.pre = d
         # compute guar
         g |= I.transitions(D, d, self)
@@ -91,9 +92,10 @@ class Conditional(Lang):
         pre = '\t' * indent + '{' + str(self.pre) + '}'
         return pre + '\n' + if_str + else_str
 
-    def analyse(self, D, I, d, r, g):
-        # stabilise d
-        d = I.capture_interference(I, D, d, r)
+    def analyse(self, D, I, d, r, g, is_atomic):
+        if not is_atomic:
+            # stabilise d
+            d = I.capture_interference(I, D, d, r)
         self.pre = d
         # init results for true branch
         d_true = D.transfer_filter(d, self.condition)
@@ -105,9 +107,9 @@ class Conditional(Lang):
         g_false = g
         # compute results
         for stmt in self.if_branch:
-            d_true, r_true, g_true = stmt.analyse(D, I, d_true, r_true, g_true)
+            d_true, r_true, g_true = stmt.analyse(D, I, d_true, r_true, g_true, is_atomic)
         for stmt in self.else_branch:
-            d_false, r_false, g_false = stmt.analyse(D, I, d_false, r_false, g_false)
+            d_false, r_false, g_false = stmt.analyse(D, I, d_false, r_false, g_false, is_atomic)
         # merge branches
         d = d_true | d_false
         r = r_true | r_false
@@ -125,26 +127,28 @@ class Loop(Lang):
         pre = '\t' * indent + '{' + str(self.pre) + '}'
         return pre + '\n' + header + '\n'.join([s.pretty(indent + 1) for s in self.statements]) + '\n' + '\t' * indent + '}'
 
-    def analyse(self, D, I, d, r, g):
+    def analyse(self, D, I, d, r, g, is_atomic):
         while True:
             initial_d = d
             initial_r = r
             initial_g = g
-            # stabilise d
-            d = I.capture_interference(I, D, d, r)
+            if not is_atomic:
+                # stabilise d
+                d = I.capture_interference(I, D, d, r)
             # filter d
             d = D.transfer_filter(d, self.condition)
             # analyse loop body
             for stmt in self.statements:
-                d, r, g = stmt.analyse(D, I, d, r, g)
+                d, r, g = stmt.analyse(D, I, d, r, g, is_atomic)
             # join to current invariant
             d |= initial_d
             r |= initial_r
             g |= initial_g
             if d == initial_d and r == initial_r and g == initial_g:
                 break
-        # stabilise d
-        d = I.capture_interference(I, D, d, r)
+        if not is_atomic:
+            # stabilise d
+            d = I.capture_interference(I, D, d, r)
         self.pre = d # record loop invariant as loop precondition
         # filter not self.condition
         d = D.transfer_filter(d, UnExpr(self.condition, UnOp.NOT))
@@ -159,12 +163,34 @@ class Assume(Lang):
         pre = '\t' * indent + '{' + str(self.pre) + '}'
         return pre + '\n' + '\t' * indent + 'assume ' + str(self.condition) + ';'
 
-    def analyse(self, D, I, d, r, g):
-        # stabilise d
-        d = I.capture_interference(I, D, d, r)
+    def analyse(self, D, I, d, r, g, is_atomic):
+        if not is_atomic:
+            # stabilise d
+            d = I.capture_interference(I, D, d, r)
         self.pre = d
         # filter d
         d = D.transfer_filter(d, self.condition)
+        return d, r, g
+
+class Atomic(Lang):
+    def __init__(self, statements: list):
+        self.statements = statements
+        self.pre = None
+
+    def pretty(self, indent=0):
+        header = '\t' * indent + 'atomic {\n'
+        pre = '\t' * indent + '{' + str(self.pre) + '}'
+        return pre + '\n' + header + '\n'.join([s.pretty(indent + 1) for s in self.statements]) + '\n' + '\t' * indent + '}'
+
+    def analyse(self, D, I, d, r, g, is_atomic):
+        if is_atomic:
+            raise RuntimeError('Cannot have an atomic block within another atomic block.')
+        # stabilise d
+        d = I.capture_interference(I, D, d, r)
+        self.pre = d
+        # analyse atomic block
+        for stmt in self.statements:
+            d, r, g = stmt.analyse(D, I, d, r, g, True)
         return d, r, g
 
 class BinExpr(Lang):

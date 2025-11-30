@@ -162,6 +162,8 @@ class ConstantDisjunctionLattice(Lattice):
     def __str__(self):
         if not self._env:
             return 'bot'
+        if len(self._env) == 1 and next(iter(self._env)) == ConstantLattice.top():
+            return 'top'
         return ' \\/ '.join(f'[{x}]' for x in self._env)
 
 
@@ -506,9 +508,7 @@ class ConditionalWritesDomain(InterferenceDomain):
 
     @staticmethod
     def transitions(D, d: Lattice, assign: Assignment) -> ConditionalWritesLattice:
-        # this version of the function is more optimised than the white paper in that x := x is not considered a read
-        env = {assign.lhs[i]: d for i in range(len(assign.lhs)) if assign.rhs[i] != assign.lhs[i]}
-        return ConditionalWritesLattice(env)
+        return ConditionalWritesLattice({lhs: d for lhs in assign.lhs})
 
     @staticmethod
     def close(D, i: ConditionalWritesLattice):
