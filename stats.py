@@ -6,6 +6,7 @@ class Stats:
     performance_time = None
     state_lattice_joins = 0
     state_lattice_meets = 0
+    iterations = 0
 
     @staticmethod
     def start_timer():

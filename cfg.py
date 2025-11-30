@@ -54,14 +54,16 @@ class Procedure(Lang):
         return d, r, g
 
 class Assignment(Lang):
-    def __init__(self, lhs: str, rhs):
+    def __init__(self, lhs: list, rhs: list):
         self.lhs = lhs
         self.rhs = rhs
         self.pre = None
 
     def pretty(self, indent=0):
         pre = '\t' * indent + '{' + str(self.pre) + '}'
-        return pre + '\n' + '\t' * indent + str(self.lhs) + ' := ' + str(self.rhs) + ';'
+        lhs = ', '.join(self.lhs)
+        rhs = ', '.join([str(expr) for expr in self.rhs])
+        return pre + '\n' + '\t' * indent + lhs + ' := ' + rhs + ';'
 
     def analyse(self, D, I, d, r, g):
         # stabilise d
@@ -187,3 +189,119 @@ class UnExpr(Lang):
 
     def pretty(self, indent=0):
         return '\t' * indent + un_op_str[self.op.value] + '(' + str(self.rhs) + ')'
+
+
+def to_dnf(expr):
+    if is_atom(expr):
+        return expr
+    elif isinstance(expr, BinExpr):
+        if expr.op == BinOp.BICOND:
+            left_implies_right = BinExpr(lhs, rhs, BinOp.IMPL)
+            right_implies_left = BinExpr(rhs, lhs, BinOp.IMPL)
+            conjunction = BinExpr(left_implies_right, right_implies_left, BinOp.CONJ)
+            return to_dnf(conjunction)
+        if expr.op == BinOp.IMPL:
+            neg_lhs = UnExpr(expr.lhs, UnOp.NOT)
+            disjunction = BinExpr(neg_lhs, rhs, BinOp.OR)
+            return to_dnf(disjunction)
+        if expr.op == BinOp.DISJ:
+            return BinExpr(to_dnf(expr.lhs), to_dnf(expr.rhs), BinOp.DISJ)
+        if expr.op == BinOp.CONJ:
+            lhs_dnf = to_dnf(expr.lhs)
+            rhs_dnf = to_dnf(expr.rhs)
+            # args are now of type: atom, negation, disjunction, conjunction
+            if isinstance(lhs_dnf, BinExpr) and lhs_dnf.op == BinOp.DISJ:
+                # distribute conjunction over disjunction
+                new_lhs = BinExpr(lhs_dnf.lhs, rhs_dnf, BinOp.CONJ)
+                new_rhs = BinExpr(lhs_dnf.rhs, rhs_dnf, BinOp.CONJ)
+                return to_dnf(BinExpr(new_lhs, new_rhs, BinOp.DISJ))
+            if isinstance(rhs_dnf, BinExpr) and rhs_dnf.op == BinOp.DISJ:
+                # distribute conjunction over disjunction
+                new_lhs = BinExpr(lhs_dnf, rhs_dnf.lhs, BinOp.CONJ)
+                new_rhs = BinExpr(lhs_dnf, rhs_dnf.rhs, BinOp.CONJ)
+                return to_dnf(BinExpr(new_lhs, new_rhs, BinOp.DISJ))
+            return BinExpr(lhs_dnf, rhs_dnf, BinOp.CONJ)
+        raise RuntimeError('This BinExpr was not identified as an atom, though it is not handled by to_dnf:\n' + str(expr))
+    elif isinstance(expr, UnExpr):
+        if expr.op == UnOp.NOT:
+            neg = apply_negation(expr.rhs)
+            if isinstance(neg, UnExpr) and neg.op == UnOp.NOT:
+                return neg
+            return to_dnf(neg)
+        return expr
+    else:
+        raise RuntimeError('Could not convert this to DNF because it is not an expression:\n' + str(expr))
+
+
+def apply_negation(expr):
+    # ensures: if the result is a NOT, the body must be an atom
+    if is_atom(expr):
+        if isinstance(expr, BinExpr):
+            if expr.op == BinOp.LT:
+                return BinExpr(expr.lhs, expr.rhs, BinOp.GE)
+            if expr.op == BinOp.LE:
+                return BinExpr(expr.lhs, expr.rhs, BinOp.GT)
+            if expr.op == BinOp.EQ:
+                return BinExpr(expr.lhs, expr.rhs, BinOp.NE)
+            if expr.op == BinOp.GE:
+                return BinExpr(expr.lhs, expr.rhs, BinOp.LT)
+            if expr.op == BinOp.GT:
+                return BinExpr(expr.lhs, expr.rhs, BinOp.LE)
+            if expr.op == BinOp.NE:
+                return BinExpr(expr.lhs, expr.rhs, BinOp.EQ)
+        return UnOp(expr, UnOp.NOT)
+    if isinstance(expr, BinExpr):
+        # we have expr.op in [BinOp.BICOND, BinOp.IMPL, BinOp.DISJ, BinOp.CONJ]
+        if expr.op == BinOp.BICOND:
+            # convert !(a <==> b) to (a && !b) || (!a && b)
+            neg_lhs = apply_negation(expr.lhs)
+            neg_rhs = apply_negation(expr.rhs)
+            lhs_disjunct = BinExpr(expr.lhs, neg_rhs, BinOp.CONJ)
+            rhs_disjunct = BinExpr(neg_lhs, expr.rhs, BinOp.CONJ)
+            return BinExpr(lhs_disjunct, rhs_disjunct, BinOp.DISJ)
+        if expr.op == BinOp.IMPL:
+            # convert !(a ==> b) to a && !b
+            neg_rhs = apply_negation(expr.rhs)
+            return BinExpr(expr.lhs, neg_rhs, BinOp.CONJ)
+        if expr.op == BinOp.DISJ:
+            # convert !(a || b) to !a && !b
+            neg_lhs = apply_negation(expr.lhs)
+            neg_rhs = apply_negation(expr.rhs)
+            return BinExpr(neg_lhs, neg_rhs, BinOp.CONJ)
+        if expr.op == BinOp.CONJ:
+            # convert !(a && b) to !a || !b
+            neg_lhs = apply_negation(expr.lhs)
+            neg_rhs = apply_negation(expr.rhs)
+            return BinExpr(neg_lhs, neg_rhs, BinOp.DISJ)
+        raise RuntimeError('Unexpected atom representing a BinExpr during negation application:\n' + str(expr))
+    if isinstance(expr, UnExpr):
+        if expr.op == UnOp.NOT:
+            # we are trying to simplify !expr where expr == !expr.rhs
+            # so we have !!expr.rhs
+            # first, try simplifying !expr.rhs, and store the result in neg
+            neg = apply_negation(expr.rhs)
+            # if neg is of the form !neg.rhs, then we simplify !!neg.rhs to neg.rhs
+            if isinstance(neg, UnExpr) and neg.op == NOT:
+                return neg.rhs
+            # otherwise, neg is some other non-negated expression that we can now attempt to negate like usual
+            return apply_negation(neg)
+        raise RuntimeError('Unexpected atom representing a UnExpr during negation application:\n' + str(expr))
+    raise RuntimeError('Expression not recognised as an atom, BinExpr or UnExpr during negation application:\n' + str(expr))
+
+
+def is_atom(expr):
+    if isinstance(expr, str) or isinstance(expr, int):
+        return True
+    if isinstance(expr, BinExpr):
+        return expr.op not in [BinOp.BICOND, BinOp.IMPL, BinOp.DISJ, BinOp.CONJ]
+    if isinstance(expr, UnExpr):
+        return expr.op not in [UnOp.NOT]
+    raise RuntimeError('Unexpected expression type: ' + str(expr))
+
+
+def to_disjunct_list(expr):
+    def to_disjunct_list_helper(expr):
+        if not isinstance(expr, BinExpr) or expr.op != BinOp.DISJ:
+            return [expr]
+        return to_disjunct_list_helper(expr.lhs) + to_disjunct_list_helper(expr.rhs)
+    return to_disjunct_list_helper(to_dnf(expr))

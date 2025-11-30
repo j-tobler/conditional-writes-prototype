@@ -162,7 +162,7 @@ class ConstantDisjunctionLattice(Lattice):
     def __str__(self):
         if not self._env:
             return 'bot'
-        return ' \\/ '.join(str(x) for x in self._env)
+        return ' \\/ '.join(f'[{x}]' for x in self._env)
 
 
 class AbstractDomain(ABC):
@@ -273,13 +273,14 @@ class ConstantDomain(AbstractDomain):
         if state.is_bot():
             return ConstantLattice.bot()
         env = state._env.copy()
-        lhs = assign.lhs
-        rhs = ConstantDomain.eval_expr(state, assign.rhs)
-        if rhs == None:
-            if lhs in env:
-                del env[lhs]
-            return ConstantLattice(env, False)
-        env[lhs] = rhs
+        for i in range(len(assign.lhs)):
+            lhs = assign.lhs[i]
+            rhs = ConstantDomain.eval_expr(state, assign.rhs[i])
+            if rhs == None:
+                if lhs in env:
+                    del env[lhs]
+            else:
+                env[lhs] = rhs
         return ConstantLattice(env, False)
         
     @staticmethod
@@ -347,7 +348,26 @@ class DisjunctiveConstantsDomain(AbstractDomain):
 
     @staticmethod
     def transfer_filter(state: ConstantDisjunctionLattice, expr) -> ConstantDisjunctionLattice:
-        return state.apply_to_each_disjunct(lambda x: ConstantDomain.transfer_filter(x, expr))
+        """
+        For each disjunct, we apply the filter just as we would in the constant domain.
+        The exception is filters that are themselves disjunctions. For example, suppose we have:
+        x || y
+        and we would like to apply the filter:
+        a || b.
+        By default, we would do:
+        x && (a || b) || y && (a || b)
+        But we would actually prefer:
+        x && a || x && b || y && a || y && b.
+        That is, we split the disjunct x by applying filters a and b separately, rather than as one expression.
+        """
+        if state.is_bot():
+            return ConstantLattice.bot()
+        disjuncts = to_disjunct_list(expr)
+        # filter by each disjunct separately and then join the results
+        new_state = DisjunctiveConstantsDomain.bot()
+        for d in disjuncts:
+            new_state |= state.apply_to_each_disjunct(lambda x: ConstantDomain.transfer_filter(x, d))
+        return new_state
 
     @staticmethod
     def havoc(state: ConstantDisjunctionLattice, vars_to_remove) -> ConstantDisjunctionLattice:
@@ -486,7 +506,9 @@ class ConditionalWritesDomain(InterferenceDomain):
 
     @staticmethod
     def transitions(D, d: Lattice, assign: Assignment) -> ConditionalWritesLattice:
-        return ConditionalWritesLattice({assign.lhs: d})
+        # this version of the function is more optimised than the white paper in that x := x is not considered a read
+        env = {assign.lhs[i]: d for i in range(len(assign.lhs)) if assign.rhs[i] != assign.lhs[i]}
+        return ConditionalWritesLattice(env)
 
     @staticmethod
     def close(D, i: ConditionalWritesLattice):

@@ -1,0 +1,21 @@
+{z == 0 && x == 0}
+
+proc T1 {
+    while z != 1 {
+        while z != 0 {}
+        z := z == 0;
+    }
+    x := 1;
+    x := 0;
+    z := 0;
+}
+
+proc T2 {
+    r := z == 0;
+    z := r * 2;
+    if z == 2 {
+        y := x;
+        z := 0;
+        assume 1;
+    }
+}

@@ -4,32 +4,34 @@ from cfg import *
 
 program_parser = Lark(
     r"""
-    start:          _precondition procedure+
+    start:           _precondition procedure+
     _precondition:   "{" biconditional "}"
-    procedure:      "proc" _SEP CNAME "{" block "}"
-    block:          _statement*
-    _statement:     assignment | conditional | loop | assume
-    assignment:     CNAME ":=" biconditional ";"
-    conditional:    "if" _SEP biconditional "{" block "}" ["else" "{" block "}"]
-    loop:           "while" _SEP biconditional "{" block "}"
-    assume:         "assume" _SEP biconditional ";"
-    ?biconditional: implication | biconditional "<==>" implication
-    ?implication:   disjunction | disjunction "==>" implication
-    ?disjunction:   conjunction | disjunction "||" conjunction
-    ?conjunction:   negation | conjunction "&&" negation
-    ?negation:      parens_bool | "!" negation
-    ?parens_bool:   inequality | "(" biconditional ")"
-    ?inequality:    sum | sum (_inequality_op sum)*
-    ?sum:           term | sum _sum_op term
-    ?term:          signed_val | term _term_op signed_val
-    ?signed_val:    parens_arith | _sum_op signed_val
-    ?parens_arith:  id | num | "(" sum ")"
-    id:             CNAME
-    num:            INT
+    procedure:       "proc" _SEP CNAME "{" block "}"
+    block:           _statement*
+    _statement:      assignment | conditional | loop | assume
+    assignment:      id_list ":=" expr_list ";"
+    id_list:         CNAME ("," CNAME)*
+    expr_list:       biconditional ("," biconditional)*
+    conditional:     "if" _SEP biconditional "{" block "}" ["else" "{" block "}"]
+    loop:            "while" _SEP biconditional "{" block "}"
+    assume:          "assume" _SEP biconditional ";"
+    ?biconditional:  implication | biconditional "<==>" implication
+    ?implication:    disjunction | disjunction "==>" implication
+    ?disjunction:    conjunction | disjunction "||" conjunction
+    ?conjunction:    negation | conjunction "&&" negation
+    ?negation:       parens_bool | "!" negation
+    ?parens_bool:    inequality | "(" biconditional ")"
+    ?inequality:     sum | sum (_inequality_op sum)*
+    ?sum:            term | sum _sum_op term
+    ?term:           signed_val | term _term_op signed_val
+    ?signed_val:     parens_arith | _sum_op signed_val
+    ?parens_arith:   id | num | "(" sum ")"
+    id:              CNAME
+    num:             INT
     !_sum_op:        "+" | "-"
     !_term_op:       "*"
     !_inequality_op: "<" | "<=" | "==" | ">=" | ">" | "!="
-    _SEP:           WS+
+    _SEP:            WS+
 
     %import common (WS, CNAME, INT)
     %ignore WS
@@ -65,7 +67,15 @@ def parse_statement(tree):
 
 # assignment: CNAME ":=" biconditional ";"
 def parse_assignment(tree):
-    return Assignment(tree.children[0].value, parse_expr(tree.children[1]))
+    assignees = tree.children[0].children
+    expressions = tree.children[1].children
+    if len(assignees) != len(expressions):
+        raise RuntimeError('Number of assignees does not match number of expressions in assignment:\n' + tree.pretty())
+    if len(set(assignees)) != len(assignees):
+        raise RuntimeError('Assignees are not unique in assignment:\n' + tree.pretty())
+    parsed_assignees = [token.value for token in assignees]
+    parsed_expressions = [parse_expr(token) for token in expressions]
+    return Assignment(parsed_assignees, parsed_expressions)
 
 # conditional: "if" _SEP biconditional "{" block "}" ["else" "{" block "}"]
 def parse_conditional(tree):

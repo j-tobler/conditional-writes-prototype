@@ -1,0 +1,22 @@
+{x == 1 && y == 1 && z == 1}
+
+proc T1 {
+    if x == 0 {
+        y := 0;
+    }
+    assume 1;
+}
+
+proc T2 {
+    if y == 0 {
+        z := 0;
+    }
+    assume 1;
+}
+
+proc T3 {
+    if z == 0 {
+        x := 0;
+    }
+    assume 1;
+}

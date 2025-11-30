@@ -49,6 +49,7 @@ def print_results(guars: dict, relys: dict, program: Program):
     print('Rely Conditions:')
     print('\n'.join([f'{proc.name}:\n{rely}' for proc, rely in relys.items()]))
     print()
+    print(f'Iterations: {Stats.iterations}')
     print(f'State lattice join and meet operations count: {Stats.state_lattice_joins + Stats.state_lattice_meets}')
     print(f'Analysis time: {Stats.performance_time}')
 
@@ -78,6 +79,7 @@ def run_analysis(I: InterferenceDomain, D: AbstractDomain, program: Program):
             guars[proc] = proc.analyse(D, I, pre, relys[proc], I.bot(D))[2]
         if guars == old_guars:
             break
+    Stats.iterations = iterations
     return guars, relys
 
 
