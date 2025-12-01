@@ -8,7 +8,8 @@ program_parser = Lark(
     _precondition:   "{" biconditional "}"
     procedure:       "proc" _SEP CNAME "{" block "}"
     block:           _statement*
-    _statement:      assignment | conditional | loop | assume | atomic
+    _statement:      assignment | conditional | loop | assume | atomic | assert
+    assert:          "assert" _SEP biconditional ";"
     atomic:          "atomic" "{" block "}"
     assignment:      id_list ":=" expr_list ";"
     id_list:         CNAME ("," CNAME)*
@@ -66,6 +67,8 @@ def parse_statement(tree):
         return parse_assume(tree)
     elif tree.data.value == 'atomic':
         return parse_atomic(tree)
+    elif tree.data.value == 'assert':
+        return parse_assert(tree)
     raise throw_parser_error()
 
 # assignment: id_list ":=" expr_list ";"
@@ -98,6 +101,10 @@ def parse_assume(tree):
 # "atomic" "{" block "}"
 def parse_atomic(tree):
     return Atomic(parse_block(tree.children[0]))
+
+# "assert" _SEP biconditional ";"
+def parse_assert(tree):
+    return Assert(parse_expr(tree.children[0]))
 
 """
 ?biconditional: implication | biconditional "<==>" implication

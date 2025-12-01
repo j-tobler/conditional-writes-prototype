@@ -1,0 +1,22 @@
+{x == 0 && buffer_full == 0}
+
+proc producer {
+	while 1 {
+		while buffer_full != 0 {}
+		assert buffer_full == 0;
+		assert x == 0;
+		x := 1;
+		buffer_full := 1;
+	}
+}
+
+proc consumer {
+	while 1 {
+		while buffer_full != 1 {}
+		assert buffer_full == 1;
+		assert x == 1;
+		r := x;
+		x := 0;
+		buffer_full := 0;
+	}
+}

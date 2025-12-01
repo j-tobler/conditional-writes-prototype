@@ -6,6 +6,7 @@ proc T1 {
         x := 0;
         r := x;
     }
+    assert r == 0;
 }
 
 proc T2 {

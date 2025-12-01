@@ -16,6 +16,14 @@ class Config:
     state_domain: StateDomains = None
     transitive_mode: bool = None
     precision: int = None
+    out: str | None = None
+
+    @staticmethod
+    def to_str():
+        return f'Target: {Config.target_path}\n'\
+            f'State Domain: {Config.state_domain}\n'\
+            f'Mode: {'transitive' if Config.transitive_mode else 'non-transitive'}\n'\
+            f'Precision: {'max' if Config.precision == -1 else str(Config.precision)}'
 
     @staticmethod
     def is_configured():
@@ -26,35 +34,43 @@ class Config:
             Config.precision
         ]
 
-def set_config():
-    arg_parser = argparse.ArgumentParser()
+    @staticmethod
+    def init():
+        arg_parser = argparse.ArgumentParser()
 
-    arg_parser.add_argument(
-        'filename',
-        type=str,
-        metavar='FILE',
-        help='path to the target program')
+        arg_parser.add_argument(
+            'filename',
+            type=str,
+            metavar='FILE',
+            help='path to the target program')
 
-    arg_parser.add_argument(
-        'state_domain',
-        choices=list(state_domain_names.keys()),
-        help='the abstract domain for representing states')
+        arg_parser.add_argument(
+            'state_domain',
+            choices=list(state_domain_names.keys()),
+            help='the abstract domain for representing states')
 
-    arg_parser.add_argument(
-        '-t',
-        action='store_true',
-        help='enable transitive analysis mode (omit for non-transitive mode)')
+        arg_parser.add_argument(
+            '-t',
+            action='store_true',
+            help='enable transitive analysis mode (omit for non-transitive mode)')
 
-    arg_parser.add_argument(
-        '-n',
-        type=int,
-        metavar='INT',
-        help='stabilisation precision metric (higher is more precise); omit for maximum precision')
+        arg_parser.add_argument(
+            '-n',
+            type=int,
+            metavar='INT',
+            help='stabilisation precision metric (higher is more precise); omit for maximum precision')
 
-    args = arg_parser.parse_args()
-    Config.target_path = args.filename
-    Config.state_domain = state_domain_names[args.state_domain]
-    Config.transitive_mode = args.t
-    Config.precision = -1 if args.n == None else args.n
-    if not Config.is_configured():
-        return RuntimeError('Failed to configure analysis.')
+        arg_parser.add_argument(
+            '-o',
+            type=str,
+            metavar='FILE',
+            help='append stats to this filepath')
+
+        args = arg_parser.parse_args()
+        Config.target_path = args.filename
+        Config.state_domain = state_domain_names[args.state_domain]
+        Config.transitive_mode = args.t
+        Config.precision = -1 if args.n == None else args.n
+        Config.out = args.o
+        if not Config.is_configured():
+            return RuntimeError('Failed to configure analysis.')

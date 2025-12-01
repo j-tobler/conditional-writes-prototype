@@ -10,6 +10,7 @@ proc T1 {
         }
     }
     x := 1;
+    assert z == 1;
     x := 0;
     z := 0;
 }
@@ -21,6 +22,7 @@ proc T2 {
         }
     }
     if z == 2 {
+        assert z == 2;
         y := x;
         z := 0;
     }

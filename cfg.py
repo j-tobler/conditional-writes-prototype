@@ -37,6 +37,9 @@ class Program(Lang):
         self.precondition = precondition
         self.procedures = procedures
 
+    def is_verified(self):
+        return all(proc.is_verified() for proc in self.procedures)
+
     def pretty(self, indent=0):
         return '\n\n'.join([p.pretty(indent) for p in self.procedures])
 
@@ -44,6 +47,9 @@ class Procedure(Lang):
     def __init__(self, name: str, statements: list):
         self.name = name
         self.statements = statements
+
+    def is_verified(self):
+        return all(stmt.is_verified() for stmt in self.statements)
 
     def pretty(self, indent=0):
         return '\t' * indent + 'proc ' + self.name + ' {\n' + '\n'.join([s.pretty(indent + 1) for s in self.statements]) + '\n' + '\t' * indent + '}'
@@ -58,6 +64,9 @@ class Assignment(Lang):
         self.lhs = lhs
         self.rhs = rhs
         self.pre = None
+
+    def is_verified(self):
+        return True
 
     def pretty(self, indent=0):
         pre = '\t' * indent + '{' + str(self.pre) + '}'
@@ -82,6 +91,9 @@ class Conditional(Lang):
         self.if_branch = if_branch
         self.else_branch = else_branch
         self.pre = None
+
+    def is_verified(self):
+        return all(stmt.is_verified() for stmt in self.if_branch) and all(stmt.is_verified() for stmt in self.else_branch)
 
     def pretty(self, indent=0):
         else_str = ''
@@ -122,6 +134,9 @@ class Loop(Lang):
         self.statements = statements
         self.pre = None
 
+    def is_verified(self):
+        return all(stmt.is_verified() for stmt in self.statements)
+
     def pretty(self, indent=0):
         header = '\t' * indent + 'while ' + str(self.condition) + ' {\n'
         pre = '\t' * indent + '{' + str(self.pre) + '}'
@@ -159,6 +174,9 @@ class Assume(Lang):
         self.condition = condition
         self.pre = None
 
+    def is_verified(self):
+        return True
+
     def pretty(self, indent=0):
         pre = '\t' * indent + '{' + str(self.pre) + '}'
         return pre + '\n' + '\t' * indent + 'assume ' + str(self.condition) + ';'
@@ -177,6 +195,9 @@ class Atomic(Lang):
         self.statements = statements
         self.pre = None
 
+    def is_verified(self):
+        return all(stmt.is_verified() for stmt in self.statements)
+
     def pretty(self, indent=0):
         header = '\t' * indent + 'atomic {\n'
         pre = '\t' * indent + '{' + str(self.pre) + '}'
@@ -191,6 +212,25 @@ class Atomic(Lang):
         # analyse atomic block
         for stmt in self.statements:
             d, r, g = stmt.analyse(D, I, d, r, g, True)
+        return d, r, g
+
+class Assert(Lang):
+    def __init__(self, condition):
+        self.condition = condition
+        self.pre = None
+
+    def is_verified(self):
+        return self.pre.implies_expr(self.condition)
+
+    def pretty(self, indent=0):
+        pre = '\t' * indent + '{' + str(self.pre) + '}'
+        return pre + '\n' + '\t' * indent + 'assert ' + str(self.condition) + ';'
+
+    # assertions are effectively ghost instructions - they have no effect on the program semantics
+    # nevertheless we still have to apply 'stabilise' so that we know self.pre captures interference
+    # we then pass the unstabilised d to the next instruction to avoid redundant applications of stabilise that cause imprecision
+    def analyse(self, D, I, d, r, g, is_atomic):
+        self.pre = d if is_atomic else I.capture_interference(I, D, d, r)
         return d, r, g
 
 class BinExpr(Lang):
@@ -275,7 +315,7 @@ def apply_negation(expr):
                 return BinExpr(expr.lhs, expr.rhs, BinOp.LE)
             if expr.op == BinOp.NE:
                 return BinExpr(expr.lhs, expr.rhs, BinOp.EQ)
-        return UnOp(expr, UnOp.NOT)
+        return UnExpr(expr, UnOp.NOT)
     if isinstance(expr, BinExpr):
         # we have expr.op in [BinOp.BICOND, BinOp.IMPL, BinOp.DISJ, BinOp.CONJ]
         if expr.op == BinOp.BICOND:

@@ -1,0 +1,64 @@
+{x1 == 1 && x2 == 1 && x3 == 1 && x4 == 1 && x5 == 1 && x6 == 1 && x7 == 1 && x8 == 1 && x9 == 1}
+
+proc T1 {
+    if x9 == 0 {
+        x1 := 0;
+    }
+    assert x1 == 1;
+}
+
+proc T2 {
+    if x1 == 0 {
+        x2 := 0;
+    }
+    assert x2 == 1;
+}
+
+proc T3 {
+    if x2 == 0 {
+        x3 := 0;
+    }
+    assert x3 == 1;
+}
+
+proc T4 {
+    if x3 == 0 {
+        x4 := 0;
+    }
+    assert x4 == 1;
+}
+
+proc T5 {
+    if x4 == 0 {
+        x5 := 0;
+    }
+    assert x5 == 1;
+}
+
+proc T6 {
+    if x5 == 0 {
+        x6 := 0;
+    }
+    assert x6 == 1;
+}
+
+proc T7 {
+    if x6 == 0 {
+        x7 := 0;
+    }
+    assert x7 == 1;
+}
+
+proc T8 {
+    if x7 == 0 {
+        x8 := 0;
+    }
+    assert x8 == 1;
+}
+
+proc T9 {
+    if x8 == 0 {
+        x9 := 0;
+    }
+    assert x9 == 1;
+}

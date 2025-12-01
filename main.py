@@ -1,13 +1,13 @@
 from analysis import *
 from parsing import program_parser, parse_program
 from cfg import Program
-from config import Config, StateDomains, set_config
+from config import Config, StateDomains
 from stats import Stats
 
 
 def main():
     # parse args and initialise global configuration struct Config
-    set_config()
+    Config.init()
 
     # read file containing target program
     file = open(Config.target_path, 'r')
@@ -29,13 +29,24 @@ def main():
         raise RuntimeError('Could not find the abstract domain: ' + str(Config.state_domain))
 
     # begin analysis
+    Stats.state_lattice_joins = 0
+    Stats.state_lattice_meets = 0
     Stats.start_timer()
     G, R = run_analysis(I, D, program)
     Stats.end_timer()
 
-    # display resulting RG conditions and performance stats
-    # note that 'program' maintains its own proof outline during the analysis
-    print_results(G, R, program)
+    if not Stats.is_configured():
+        raise RuntimeError(f'Stats block was not fully configured at the end of analysis:\n{Stats.to_str()}')
+
+    if Config.out:
+        file = open(Config.out, 'a')
+        file.write(Config.to_str() + '\n')
+        file.write(Stats.to_str() + '\n\n')
+        file.close()
+    else:
+        # display resulting RG conditions and performance stats
+        # note that 'program' maintains its own proof outline during the analysis
+        print_results(G, R, program)
 
 
 def print_results(guars: dict, relys: dict, program: Program):
@@ -52,6 +63,7 @@ def print_results(guars: dict, relys: dict, program: Program):
     print(f'Iterations: {Stats.iterations}')
     print(f'State lattice join and meet operations count: {Stats.state_lattice_joins + Stats.state_lattice_meets}')
     print(f'Analysis time: {Stats.performance_time}')
+    print(f'Verified: {Stats.verified}')
 
 
 def run_analysis(I: InterferenceDomain, D: AbstractDomain, program: Program):
@@ -80,6 +92,7 @@ def run_analysis(I: InterferenceDomain, D: AbstractDomain, program: Program):
         if guars == old_guars:
             break
     Stats.iterations = iterations
+    Stats.verified = program.is_verified()
     return guars, relys
 
 

@@ -25,6 +25,10 @@ class Lattice(ABC):
         pass
 
     @abstractmethod
+    def implies_expr(self, expr):
+        pass
+
+    @abstractmethod
     def __or__(self, other):
         pass
 
@@ -75,6 +79,16 @@ class ConstantLattice(Lattice):
 
     def constrained_vars(self):
         return self._env.keys()
+
+    def implies_expr(self, expr):
+        # this is a very conservative implementation, designed to handle just the examples for the paper
+        # we only handle expressions of the form '<var> == <int>'
+        if self.is_bot():
+            return True
+        if not isinstance(expr, BinExpr) or expr.op != BinOp.EQ or not isinstance(expr.lhs, str) or \
+            not isinstance(expr.rhs, int):
+            raise RuntimeError('Assertion too complex to verify.')
+        return expr.lhs in self._env and self._env[expr.lhs] == expr.rhs
 
     def __or__(self, other):
         Stats.state_lattice_joins += 1
@@ -141,6 +155,9 @@ class ConstantDisjunctionLattice(Lattice):
 
     def apply_to_each_disjunct(self, func):
         return ConstantDisjunctionLattice({func(x) for x in self._env}).well_formed()
+
+    def implies_expr(self, expr):
+        return self.is_bot() or all(x.implies_expr(expr) for x in self._env)
 
     def __or__(self, other):
         Stats.state_lattice_joins += 1
@@ -441,6 +458,9 @@ class ConditionalWritesLattice(Lattice):
 
     def constrained_vars(self):
         raise NotImplementedError('Function constrained_vars not implemented for ConditionalWritesLattice.')
+
+    def implies_expr(self, expr):
+        raise RuntimeError('implies_expr called on an interference lattice.')
 
     def __or__(self, other):
         env = self._env.copy()

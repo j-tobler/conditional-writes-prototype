@@ -10,5 +10,5 @@ proc T2 {
     if z == 1 {
         r := 0;
     }
-    assume 1;
+    assert r == 0;
 }

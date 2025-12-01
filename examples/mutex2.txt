@@ -2,12 +2,12 @@
 
 proc T1 {
     while z != 0 {}
+    assert z == 0;
     z := 1;
-    assume 1;
 }
 
 proc T2 {
     while z != 1 {}
+    assert z == 1;
     z := 0;
-    assume 1;
 }
