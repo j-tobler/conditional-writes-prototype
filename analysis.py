@@ -540,7 +540,7 @@ class ConditionalWritesDomain(InterferenceDomain):
             # only update mappings for variables not mapped to bot
             for v in i._env.keys():
                 # update mapping for v
-                # iterate through variables constrained in i._env[v] (we skip optimisation 2 for now)
+                # iterate through variables constrained in i._env[v]
                 constrained = D.constrained_vars(i._env[v])
                 i._env[v] = ConditionalWritesDomain.close_helper(D, set(), i, constrained, v, set())
             # i |= old_i
