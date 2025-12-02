@@ -1,7 +1,7 @@
 import subprocess
 
 targets = [
-    'examples/backtrack.txt',
+    'examples/reset.txt',
     'examples/circular.txt',
     'examples/mutex1.txt',
     'examples/mutex2.txt',
