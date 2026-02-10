@@ -262,13 +262,13 @@ def to_dnf(expr):
         return expr
     elif isinstance(expr, BinExpr):
         if expr.op == BinOp.BICOND:
-            left_implies_right = BinExpr(lhs, rhs, BinOp.IMPL)
-            right_implies_left = BinExpr(rhs, lhs, BinOp.IMPL)
+            left_implies_right = BinExpr(expr.lhs, expr.rhs, BinOp.IMPL)
+            right_implies_left = BinExpr(expr.rhs, expr.lhs, BinOp.IMPL)
             conjunction = BinExpr(left_implies_right, right_implies_left, BinOp.CONJ)
             return to_dnf(conjunction)
         if expr.op == BinOp.IMPL:
             neg_lhs = UnExpr(expr.lhs, UnOp.NOT)
-            disjunction = BinExpr(neg_lhs, rhs, BinOp.OR)
+            disjunction = BinExpr(neg_lhs, expr.rhs, BinOp.DISJ)
             return to_dnf(disjunction)
         if expr.op == BinOp.DISJ:
             return BinExpr(to_dnf(expr.lhs), to_dnf(expr.rhs), BinOp.DISJ)
@@ -347,7 +347,7 @@ def apply_negation(expr):
             # first, try simplifying !expr.rhs, and store the result in neg
             neg = apply_negation(expr.rhs)
             # if neg is of the form !neg.rhs, then we simplify !!neg.rhs to neg.rhs
-            if isinstance(neg, UnExpr) and neg.op == NOT:
+            if isinstance(neg, UnExpr) and neg.op == UnOp.NOT:
                 return neg.rhs
             # otherwise, neg is some other non-negated expression that we can now attempt to negate like usual
             return apply_negation(neg)

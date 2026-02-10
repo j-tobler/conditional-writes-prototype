@@ -12,10 +12,10 @@ state_domain_names = {
 }
 
 class Config:
-    target_path: str = None
-    state_domain: StateDomains = None
-    transitive_mode: bool = None
-    precision: int = None
+    target_path = ''
+    state_domain = None
+    transitive_mode = None
+    precision = -1
     out: str | None = None
 
     @staticmethod

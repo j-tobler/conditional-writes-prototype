@@ -141,7 +141,7 @@ def parse_expr(tree):
         return parse_expr(tree.children[0])
     
     elif tree.data.value == 'inequality':
-        def parse_inequality_op(op_str):
+        def parse_inequality_op(op_str) -> BinOp:
             if op_str == '<':
                 return BinOp.LT
             elif op_str == '<=':
@@ -156,6 +156,7 @@ def parse_expr(tree):
                 return BinOp.NE
             else:
                 throw_parser_error()
+                exit(1) # unreachable exit, for type checking purposes
         inequality_op = parse_inequality_op(tree.children[1].value)
         conjunction = BinExpr(parse_expr(tree.children[0]), parse_expr(tree.children[2]), inequality_op)
         i = 2
@@ -174,6 +175,7 @@ def parse_expr(tree):
             op = BinOp.MINUS
         else:
             throw_parser_error()
+            exit(1) # unreachable exit, for type checking purposes
         return BinExpr(parse_expr(tree.children[0]), parse_expr(tree.children[2]), op)
     
     elif tree.data.value == 'term':
@@ -182,6 +184,7 @@ def parse_expr(tree):
             op = BinOp.TIMES
         else:
             throw_parser_error()
+            exit(1) # unreachable exit, for type checking purposes
         return BinExpr(parse_expr(tree.children[0]), parse_expr(tree.children[2]), op)
     
     elif tree.data.value == 'signed_val':
@@ -192,6 +195,7 @@ def parse_expr(tree):
             op = UnOp.NEG
         else:
             throw_parser_error()
+            exit(1) # unreachable exit, for type checking purposes
         return UnExpr(parse_expr(tree.children[1]), op)
     
     elif tree.data.value == 'parens_arith':
