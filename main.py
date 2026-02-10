@@ -66,7 +66,7 @@ def print_results(guars: dict, relys: dict, program: Program):
     print(f'Verified: {Stats.verified}')
 
 
-def run_analysis(I: InterferenceDomain, D: AbstractDomain, program: Program):
+def run_analysis(I: type[InterferenceDomain], D: type[AbstractDomain], program: Program):
     def generate_rely(proc, guars):
         rely = I.bot(D)
         for other_proc in guars:

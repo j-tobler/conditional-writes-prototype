@@ -3,45 +3,46 @@ from itertools import combinations
 from cfg import *
 from stats import Stats
 from config import Config
+from typing import TypeVar, Generic
 
 
 class Lattice(ABC):
     @staticmethod
     @abstractmethod
-    def top():
+    def top() -> Lattice:
         pass
 
     @staticmethod
     @abstractmethod
-    def bot():
+    def bot() -> Lattice:
         pass
 
     @abstractmethod
-    def is_bot(self):
+    def is_bot(self) -> bool:
         pass
 
     @abstractmethod
-    def constrained_vars(self):
+    def constrained_vars(self) -> set:
         pass
 
     @abstractmethod
-    def implies_expr(self, expr):
+    def implies_expr(self, expr) -> bool:
         pass
 
     @abstractmethod
-    def __or__(self, other):
+    def __or__(self, other) -> Lattice:
         pass
 
     @abstractmethod
-    def __and__(self, other):
+    def __and__(self, other) -> Lattice:
         pass
 
     @abstractmethod
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         pass
 
     @abstractmethod
-    def __hash__(self):
+    def __hash__(self) -> int:
         pass
 
     def __ne__(self, other):
@@ -58,6 +59,9 @@ class Lattice(ABC):
 
     def __gt__(self, other):
         return self >= other and self != other
+
+
+L = TypeVar('L', bound=Lattice)
 
 
 class ConstantLattice(Lattice):
@@ -78,7 +82,7 @@ class ConstantLattice(Lattice):
         return self._is_bot
 
     def constrained_vars(self):
-        return self._env.keys()
+        return set(self._env.keys())
 
     def implies_expr(self, expr):
         # this is a very conservative implementation, designed to handle just the examples for the paper
@@ -184,39 +188,39 @@ class ConstantDisjunctionLattice(Lattice):
         return ' \\/ '.join(f'[{x}]' for x in self._env)
 
 
-class AbstractDomain(ABC):
+class AbstractDomain(ABC, Generic[L]):
     @staticmethod
     @abstractmethod
-    def transfer_assign(state: Lattice, inst: Assignment) -> Lattice:
+    def transfer_assign(state: L, assign: Assignment) -> L:
         pass
         
     @staticmethod
     @abstractmethod
-    def transfer_filter(state: Lattice, inst: Lang) -> Lattice:
+    def transfer_filter(state: L, expr: Lang) -> L:
         pass
 
     @staticmethod
     @abstractmethod
-    def havoc(state: Lattice, vars_to_remove) -> Lattice:
+    def havoc(state: L, vars_to_remove) -> L:
         pass
 
     @staticmethod
     @abstractmethod
-    def constrained_vars(state: Lattice) -> set:
+    def constrained_vars(state: L) -> set:
         pass
 
     @staticmethod
     @abstractmethod
-    def top() -> Lattice:
+    def top() -> L:
         pass
 
     @staticmethod
     @abstractmethod
-    def bot() -> Lattice:
+    def bot() -> L:
         pass
 
 
-class ConstantDomain(AbstractDomain):
+class ConstantDomain(AbstractDomain[ConstantLattice]):
     @staticmethod
     def eval_expr(state: ConstantLattice, expr) -> int | None:
         env = state._env
@@ -349,7 +353,7 @@ class ConstantDomain(AbstractDomain):
 
     @staticmethod
     def constrained_vars(state: ConstantLattice) -> set:
-        return state.constrained_vars()
+        return set(state.constrained_vars())
 
     @staticmethod
     def top() -> ConstantLattice:
@@ -380,7 +384,7 @@ class DisjunctiveConstantsDomain(AbstractDomain):
         That is, we split the disjunct x by applying filters a and b separately, rather than as one expression.
         """
         if state.is_bot():
-            return ConstantLattice.bot()
+            return ConstantDisjunctionLattice.bot()
         disjuncts = to_disjunct_list(expr)
         # filter by each disjunct separately and then join the results
         new_state = DisjunctiveConstantsDomain.bot()
@@ -408,7 +412,7 @@ class DisjunctiveConstantsDomain(AbstractDomain):
 class InterferenceDomain(ABC):
     @staticmethod
     @abstractmethod
-    def stabilise(D, state, interference):
+    def stabilise(D, state, interference) -> Lattice:
         pass
 
     @staticmethod
@@ -422,12 +426,12 @@ class InterferenceDomain(ABC):
         
     @staticmethod
     @abstractmethod
-    def transitions(D, state, inst):
+    def transitions(D, state, assign) -> Lattice:
         pass
 
     @staticmethod
     @abstractmethod
-    def close(D, interference):
+    def close(D, interference) -> Lattice:
         pass
 
     @staticmethod
@@ -492,23 +496,23 @@ class ConditionalWritesLattice(Lattice):
 
 class ConditionalWritesDomain(InterferenceDomain):
     @staticmethod
-    def stabilise(D, d: Lattice, i: ConditionalWritesLattice) -> Lattice:
+    def stabilise(D, state: Lattice, interference: ConditionalWritesLattice) -> Lattice:
         N = Config.precision
         # N == -1 specifies maximum precision.
-        N = len(i._env.keys()) if N == -1 or N > len(i._env.keys()) else N
-        X = ConditionalWritesDomain.stabilise_helper(D, set(), i, d, N, set())
-        if N == len(i._env.keys()):
-            return d | X
-        VN = {frozenset(combo) for combo in combinations(i._env.keys(), N + 1)}
+        N = len(interference._env.keys()) if N == -1 or N > len(interference._env.keys()) else N
+        X = ConditionalWritesDomain.stabilise_helper(D, set(), interference, state, N, set())
+        if N == len(interference._env.keys()):
+            return state | X
+        VN = {frozenset(combo) for combo in combinations(interference._env.keys(), N + 1)}
         Y = D.bot()
         for V in VN:
-            meet = d
+            meet = state
             for v in V:
-                meet &= i._env(v)
+                meet &= interference._env[v]
             Y |= meet
         flattened = {v for subset in VN for v in subset}
         Y = D.havoc(Y, flattened)
-        return d | X | Y
+        return state | X | Y
 
     @staticmethod
     def stabilise_helper(D, V, i, d, N, done) -> Lattice:
@@ -527,26 +531,26 @@ class ConditionalWritesDomain(InterferenceDomain):
         return ret
 
     @staticmethod
-    def transitions(D, d: Lattice, assign: Assignment) -> ConditionalWritesLattice:
-        return ConditionalWritesLattice({lhs: d for lhs in assign.lhs})
+    def transitions(D, state: Lattice, assign: Assignment) -> ConditionalWritesLattice:
+        return ConditionalWritesLattice({lhs: state for lhs in assign.lhs})
 
     @staticmethod
-    def close(D, i: ConditionalWritesLattice):
-        # if i._env[v] is bot, then close(i)._env[v] will also be bot, so we don't need to consider unmapped vars
+    def close(D, interference: ConditionalWritesLattice):
+        # if interference._env[v] is bot, then close(interference)._env[v] will also be bot, so we don't need to consider unmapped vars
         while True:
-            old_i = i
-            i = ConditionalWritesLattice(i._env.copy())
-            # update i
+            old_i = interference
+            interference = ConditionalWritesLattice(interference._env.copy())
+            # update interference
             # only update mappings for variables not mapped to bot
-            for v in i._env.keys():
+            for v in interference._env.keys():
                 # update mapping for v
-                # iterate through variables constrained in i._env[v]
-                constrained = D.constrained_vars(i._env[v])
-                i._env[v] = ConditionalWritesDomain.close_helper(D, set(), i, constrained, v, set())
-            # i |= old_i
+                # iterate through variables constrained in interference._env[v]
+                constrained = D.constrained_vars(interference._env[v])
+                interference._env[v] = ConditionalWritesDomain.close_helper(D, set(), interference, constrained, v, set())
+            # interference |= old_i
             # check if reached fixpoint
-            if i == old_i:
-                return i
+            if interference == old_i:
+                return interference
 
     @staticmethod
     def close_helper(D, V, i, powset_domain, v, done):

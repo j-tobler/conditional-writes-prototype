@@ -1,0 +1,220 @@
+Target: examples/reset.txt
+State Domain: StateDomains.CONSTANTS
+Mode: non-transitive
+Precision: max
+Time: 0.0001594160003151046
+State-Lattice Joins: 72
+State-Lattice Meets: 51
+State-Lattice Joins + Meets: 123
+Iterations: 2
+Verified: False
+
+Target: examples/reset.txt
+State Domain: StateDomains.CONSTANTS
+Mode: transitive
+Precision: max
+Time: 0.00021087500135763548
+State-Lattice Joins: 72
+State-Lattice Meets: 96
+State-Lattice Joins + Meets: 168
+Iterations: 2
+Verified: False
+
+Target: examples/reset.txt
+State Domain: StateDomains.DISJUNCTIVE_CONSTANTS
+Mode: non-transitive
+Precision: max
+Time: 0.0006329169991659
+State-Lattice Joins: 77
+State-Lattice Meets: 470
+State-Lattice Joins + Meets: 547
+Iterations: 2
+Verified: True
+
+Target: examples/reset.txt
+State Domain: StateDomains.DISJUNCTIVE_CONSTANTS
+Mode: transitive
+Precision: max
+Time: 0.0008239589988079388
+State-Lattice Joins: 79
+State-Lattice Meets: 703
+State-Lattice Joins + Meets: 782
+Iterations: 2
+Verified: False
+
+Target: examples/circular.txt
+State Domain: StateDomains.CONSTANTS
+Mode: non-transitive
+Precision: max
+Time: 0.0004946670014760457
+State-Lattice Joins: 396
+State-Lattice Meets: 224
+State-Lattice Joins + Meets: 620
+Iterations: 2
+Verified: True
+
+Target: examples/circular.txt
+State Domain: StateDomains.CONSTANTS
+Mode: transitive
+Precision: max
+Time: 0.0006420839999918826
+State-Lattice Joins: 396
+State-Lattice Meets: 440
+State-Lattice Joins + Meets: 836
+Iterations: 2
+Verified: True
+
+Target: examples/circular.txt
+State Domain: StateDomains.DISJUNCTIVE_CONSTANTS
+Mode: non-transitive
+Precision: max
+Time: 0.0015157500001805602
+State-Lattice Joins: 433
+State-Lattice Meets: 586
+State-Lattice Joins + Meets: 1019
+Iterations: 2
+Verified: True
+
+Target: examples/circular.txt
+State Domain: StateDomains.DISJUNCTIVE_CONSTANTS
+Mode: transitive
+Precision: max
+Time: 0.0018987080002261791
+State-Lattice Joins: 433
+State-Lattice Meets: 802
+State-Lattice Joins + Meets: 1235
+Iterations: 2
+Verified: True
+
+Target: examples/mutex1.txt
+State Domain: StateDomains.CONSTANTS
+Mode: non-transitive
+Precision: max
+Time: 0.00012341599904175382
+State-Lattice Joins: 46
+State-Lattice Meets: 21
+State-Lattice Joins + Meets: 67
+Iterations: 2
+Verified: True
+
+Target: examples/mutex1.txt
+State Domain: StateDomains.CONSTANTS
+Mode: transitive
+Precision: max
+Time: 0.00017529099932289682
+State-Lattice Joins: 55
+State-Lattice Meets: 48
+State-Lattice Joins + Meets: 103
+Iterations: 2
+Verified: True
+
+Target: examples/mutex1.txt
+State Domain: StateDomains.DISJUNCTIVE_CONSTANTS
+Mode: non-transitive
+Precision: max
+Time: 0.0003802499995799735
+State-Lattice Joins: 55
+State-Lattice Meets: 186
+State-Lattice Joins + Meets: 241
+Iterations: 2
+Verified: True
+
+Target: examples/mutex1.txt
+State Domain: StateDomains.DISJUNCTIVE_CONSTANTS
+Mode: transitive
+Precision: max
+Time: 0.0005303329999151174
+State-Lattice Joins: 64
+State-Lattice Meets: 294
+State-Lattice Joins + Meets: 358
+Iterations: 2
+Verified: True
+
+Target: examples/mutex2.txt
+State Domain: StateDomains.CONSTANTS
+Mode: non-transitive
+Precision: max
+Time: 0.00010558299982221797
+State-Lattice Joins: 36
+State-Lattice Meets: 12
+State-Lattice Joins + Meets: 48
+Iterations: 2
+Verified: False
+
+Target: examples/mutex2.txt
+State Domain: StateDomains.CONSTANTS
+Mode: transitive
+Precision: max
+Time: 0.00010850000035134144
+State-Lattice Joins: 36
+State-Lattice Meets: 15
+State-Lattice Joins + Meets: 51
+Iterations: 2
+Verified: False
+
+Target: examples/mutex2.txt
+State Domain: StateDomains.DISJUNCTIVE_CONSTANTS
+Mode: non-transitive
+Precision: max
+Time: 0.00043900000127905514
+State-Lattice Joins: 66
+State-Lattice Meets: 252
+State-Lattice Joins + Meets: 318
+Iterations: 2
+Verified: True
+
+Target: examples/mutex2.txt
+State Domain: StateDomains.DISJUNCTIVE_CONSTANTS
+Mode: transitive
+Precision: max
+Time: 0.00046683300024596974
+State-Lattice Joins: 63
+State-Lattice Meets: 276
+State-Lattice Joins + Meets: 339
+Iterations: 2
+Verified: True
+
+Target: examples/spinlock.txt
+State Domain: StateDomains.CONSTANTS
+Mode: non-transitive
+Precision: max
+Time: 0.0003505000004224712
+State-Lattice Joins: 215
+State-Lattice Meets: 121
+State-Lattice Joins + Meets: 336
+Iterations: 2
+Verified: False
+
+Target: examples/spinlock.txt
+State Domain: StateDomains.CONSTANTS
+Mode: transitive
+Precision: max
+Time: 0.0003411249999771826
+State-Lattice Joins: 182
+State-Lattice Meets: 109
+State-Lattice Joins + Meets: 291
+Iterations: 2
+Verified: False
+
+Target: examples/spinlock.txt
+State Domain: StateDomains.DISJUNCTIVE_CONSTANTS
+Mode: non-transitive
+Precision: max
+Time: 0.0014820840005995706
+State-Lattice Joins: 221
+State-Lattice Meets: 1114
+State-Lattice Joins + Meets: 1335
+Iterations: 2
+Verified: True
+
+Target: examples/spinlock.txt
+State Domain: StateDomains.DISJUNCTIVE_CONSTANTS
+Mode: transitive
+Precision: max
+Time: 0.002126084000337869
+State-Lattice Joins: 211
+State-Lattice Meets: 2132
+State-Lattice Joins + Meets: 2343
+Iterations: 2
+Verified: True
+

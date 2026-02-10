@@ -4,10 +4,10 @@ import time
 class Stats:
     _timer = None
     performance_time = None
-    state_lattice_joins = None
-    state_lattice_meets = None
-    iterations = None
-    verified = None
+    state_lattice_joins = 0
+    state_lattice_meets = 0
+    iterations = 0
+    verified = False
 
     @staticmethod
     def to_str():

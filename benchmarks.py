@@ -20,8 +20,8 @@ def main():
     file.close()
     for target in targets:
         for domain in state_domains:
-            subprocess.run(['python', 'main.py', target, domain, '-o', out, '-t'])
             subprocess.run(['python', 'main.py', target, domain, '-o', out])
+            subprocess.run(['python', 'main.py', target, domain, '-o', out, '-t'])
 
 if __name__ == '__main__':
     main()
