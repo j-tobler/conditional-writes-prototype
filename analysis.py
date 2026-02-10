@@ -479,7 +479,7 @@ class ConditionalWritesLattice(Lattice):
         return ConditionalWritesLattice(env).filter_out_bot()
 
     def filter_out_bot(self):
-        self._env = {k: v for k, v in self._env if not v.is_bot()()}
+        self._env = {k: v for k, v in self._env.items() if not v.is_bot()}
         return self
 
     def __eq__(self, other):
