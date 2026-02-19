@@ -1,6 +1,6 @@
 # Prototype for the Conditional-Writes Domain
 
-This is the artifact accompanying the paper "Generating Rely-Guarantee Conditions with the Conditional-Writes Domain" by James Tobler and Graeme Smith for The 27th International Symposium on Formal Methods (FM 2026). We are applying for the badges "functional", "reusable", and "available".
+This is the artifact accompanying the paper "Generating Rely-Guarantee Conditions with the Conditional-Writes Domain" by James Tobler and Graeme Smith for The 27th International Symposium on Formal Methods (FM 2026).
 
 ## Installation
 
